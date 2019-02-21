@@ -649,7 +649,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
   }
 }
 
-// Collect path conditions for a basic block. 
+// Collect path conditions for a basic block.
 // There are two kinds of path conditions, which correspond to
 // two Souper instruction kinds, pc and blockpc, respectively.
 // (1) The PC condition is added when the given predecessor of
@@ -658,8 +658,8 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 //          B1
 //         /  \
 //       B2    B3
-//     The path conditions [B1->B2] and [B1->B3] will be added 
-//     to B2 and B3's PCs, respectively, because B1 can determine 
+//     The path conditions [B1->B2] and [B1->B3] will be added
+//     to B2 and B3's PCs, respectively, because B1 can determine
 //     the choice of either B2 or B3.
 // (2) The BlockPC condition handles cases where we don't know
 //     which predecessor would be chosen. In this case, we recursively
@@ -667,9 +667,9 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 //     the PC condition (as defined above) is met. Then we add
 //     the this condition into the BlockPCs of the basic block from
 //     which we start our recursion. If a loop head or an entry
-//     point of an irreducible loop is encountered along any path, 
+//     point of an irreducible loop is encountered along any path,
 //     we stash the collected BlockPCs (if there is any) and return.
-//     The following examples (without loops) describe the idea. 
+//     The following examples (without loops) describe the idea.
 //     A simple example:
 //         B1
 //        /  \
@@ -681,7 +681,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 //     Instead, we add whatever path conditions dominating B2 and
 //     B3 into B4's BlockPCs. In this simple case, we will have
 //     blockpc %B4, 0, s1, r1 // B1->B2
-//      
+//
 // Now consider a more complex example:
 //            B1          B2
 //           /  \        /  \
