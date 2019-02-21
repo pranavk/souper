@@ -562,6 +562,15 @@ Inst *ExprBuilder::buildHelper(Value *V) {
         case Intrinsic::sadd_sat: {
 	  return IC.getInst(Inst::SAddSat, L->Width, {L, R});
 	}
+        case Intrinsic::uadd_sat: {
+	  return IC.getInst(Inst::UAddSat, L->Width, {L, R});
+	}
+        case Intrinsic::ssub_sat: {
+	  return IC.getInst(Inst::SSubSat, L->Width, {L, R});
+	}
+        case Intrinsic::usub_sat: {
+	  return IC.getInst(Inst::USubSat, L->Width, {L, R});
+	}
       }
     } else {
       Function* F = Call->getCalledFunction();

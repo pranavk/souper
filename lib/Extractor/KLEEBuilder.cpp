@@ -368,8 +368,47 @@ private:
     }
     case Inst::SAddSat:
     {
-      ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      return SelectExpr::create(get(addnswUB(I)), Add, klee::ConstantExpr::alloc(llvm::APInt::getSignedMaxValue(I->Width)));
+      ref<Expr> add = AddExpr::create(get(Ops[0]), get(Ops[1]));
+      auto sextL = SExtExpr::create(get(Ops[0]), I->Width + 1);
+      auto sextR = SExtExpr::create(get(Ops[1]), I->Width + 1);
+      auto addExt = AddExpr::create(sextL, sextR);
+      auto smin = klee::ConstantExpr::alloc(llvm::APInt::getSignedMinValue(I->Width));
+      auto smax = klee::ConstantExpr::alloc(llvm::APInt::getSignedMaxValue(I->Width));
+      auto sminExt = SExtExpr::create(smin, I->Width + 1);
+      auto smaxExt = SExtExpr::create(smax, I->Width + 1);
+      auto pred = SleExpr::create(addExt, sminExt);
+
+      auto pred2 = SgeExpr::create(addExt, smaxExt);
+      auto select2 = SelectExpr::create(pred2, smax, add);
+
+      return SelectExpr::create(pred, smin, select2);
+    }
+    case Inst::UAddSat:
+    {
+      ref<Expr> add = AddExpr::create(get(Ops[0]), get(Ops[1]));
+      return SelectExpr::create(get(addnuwUB(I)), add, klee::ConstantExpr::alloc(llvm::APInt::getMaxValue(I->Width)));
+    }
+    case Inst::SSubSat:
+    {
+      ref<Expr> sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
+      auto sextL = SExtExpr::create(get(Ops[0]), I->Width + 1);
+      auto sextR = SExtExpr::create(get(Ops[1]), I->Width + 1);
+      auto subExt = SubExpr::create(sextL, sextR);
+      auto smin = klee::ConstantExpr::alloc(llvm::APInt::getSignedMinValue(I->Width));
+      auto smax = klee::ConstantExpr::alloc(llvm::APInt::getSignedMaxValue(I->Width));
+      auto sminExt = SExtExpr::create(smin, I->Width + 1);
+      auto smaxExt = SExtExpr::create(smax, I->Width + 1);
+      auto pred = SleExpr::create(subExt, sminExt);
+
+      auto pred2 = SgeExpr::create(subExt, smaxExt);
+      auto select2 = SelectExpr::create(pred2, smax, sub);
+
+      return SelectExpr::create(pred, smin, select2);
+    }
+    case Inst::USubSat:
+    {
+      ref<Expr> sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
+      return SelectExpr::create(get(subnuwUB(I)), sub, klee::ConstantExpr::alloc(llvm::APInt::getMinValue(I->Width)));
     }
     case Inst::SAddWithOverflow:
     case Inst::UAddWithOverflow:

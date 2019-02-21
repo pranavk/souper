@@ -111,6 +111,9 @@ struct Inst : llvm::FoldingSetNode {
     UMulWithOverflow,
     UMulO,
     SAddSat,
+    UAddSat,
+    SSubSat,
+    USubSat,
 
     ReservedConst,
     ReservedInst,

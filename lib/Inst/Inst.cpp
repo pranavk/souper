@@ -433,6 +433,12 @@ const char *Inst::getKindName(Kind K) {
     return "umul.with.overflow";
   case SAddSat:
     return "sadd.sat";
+  case UAddSat:
+    return "uadd.sat";
+  case SSubSat:
+    return "ssub.sat";
+  case USubSat:
+    return "usub.sat";
   case ReservedConst:
     return "reservedconst";
   case ReservedInst:
@@ -505,6 +511,9 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("smul.with.overflow", Inst::SMulWithOverflow)
                    .Case("umul.with.overflow", Inst::UMulWithOverflow)
                    .Case("sadd.sat", Inst::SAddSat)
+                   .Case("uadd.sat", Inst::UAddSat)
+                   .Case("ssub.sat", Inst::SSubSat)
+                   .Case("usub.sat", Inst::USubSat)
                    .Case("extractvalue", Inst::ExtractValue)
                    .Default(Inst::None);
 }

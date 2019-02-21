@@ -552,6 +552,9 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOP(SDiv, SDiv);
     BINOPF(SDivExact, SDiv, Exact);
     BINOP(SAddSat, SAdd_Sat)
+    BINOP(UAddSat, UAdd_Sat)
+    BINOP(SSubSat, SSub_Sat)
+    BINOP(USubSat, USub_Sat)
 
     #define ICMP(SOUPER, ALIVE) case souper::Inst::SOUPER: {     \
       ExprCache[I] = Builder.iCmp(t, Name, IR::ICmp::ALIVE,      \
