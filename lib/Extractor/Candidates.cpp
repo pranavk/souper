@@ -565,6 +565,11 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
+        case Intrinsic::sadd_sat: {
+	  // TODO: Factor out *R
+	  Inst *R = get(II->getOperand(1));
+	  return IC.getInst(Inst::SAddSat, L->Width, {L, R}, /*Available=*/false);
+	}
       }
     } else {
       Function* F = Call->getCalledFunction();

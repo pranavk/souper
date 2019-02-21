@@ -366,6 +366,11 @@ private:
       unsigned Index = Ops[1]->Val.getZExtValue();
       return get(Ops[0]->Ops[Index]);
     }
+    case Inst::SAddSat:
+    {
+      ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
+      return SelectExpr::create(get(addnswUB(I)), Add, klee::ConstantExpr::alloc(llvm::APInt::getSignedMaxValue(I->Width)));
+    }
     case Inst::SAddWithOverflow:
     case Inst::UAddWithOverflow:
     case Inst::SSubWithOverflow:

@@ -538,6 +538,7 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::SMulWithOverflow:
   case Inst::UMulWithOverflow:
   case Inst::ExtractValue:
+  case Inst::SAddSat:
     MinOps = MaxOps = 2;
     break;
 
