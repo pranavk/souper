@@ -560,7 +560,7 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
         case Intrinsic::sadd_sat: {
-	  return IC.getInst(Inst::SAddSat, L->Width, {L, R}, /*Available=*/false);
+	  return IC.getInst(Inst::SAddSat, L->Width, {L, R});
 	}
       }
     } else {
