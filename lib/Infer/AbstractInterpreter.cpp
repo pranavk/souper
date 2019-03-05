@@ -266,8 +266,9 @@ namespace souper {
       } else {
         return Result;
       }
-      // pranavk: what!
-      if ((Other.Zero & 1) != 0) {
+
+      // Constants are never equal to 0
+      if (Other.Zero.isAllOnesValue()) {
         Result.Zero.setBit(0);
         return Result;
       } else {
