@@ -62,6 +62,10 @@ namespace souper {
         return Result;
       }
     }
+
+    if (KB0.hasConflict() || KB1.hasConflict())
+      assert(false && "Conflicting KB information!");
+
     switch(I->K) {
     case Inst::Const:
     case Inst::Var : {
@@ -192,16 +196,15 @@ namespace souper {
         return Op0KB;
       } else if (isReservedConst(I->Ops[1])) {
         Result.Zero.setLowBits(1);
-        return Result;
-      } else {
+      } else if (!KB1.isZero()) {
 	auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
 	auto minNum = 1 << (confirmedTrailingZeros - 1);
-	if (minNum > I->Width)
-	  Result.Zero.setAllBits();
-	else
+	// otherwise, it's poison
+	if (minNum < I->Width)
 	  Result.Zero.setLowBits(minNum);
-        return Result;
       }
+
+      return Result;
     }
 //   case ShlNSW:
 //     return "shlnsw";
@@ -226,12 +229,11 @@ namespace souper {
 	// we don't synthesize '0' as constant
 	Result.Zero.setHighBits(1);
 	return Result;
-      } else {
+      } else if (!KB1.isZero()) {
 	auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
 	auto minNum = 1 << (confirmedTrailingZeros - 1);
-	if (minNum > I->Width)
-	  Result.Zero.setAllBits();
-	else
+	// otherwise, it's poison
+	if (minNum < I->Width)
 	  Result.Zero.setHighBits(minNum);
         return Result;
       }
