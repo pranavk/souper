@@ -222,7 +222,17 @@ namespace souper {
         Op0KB.Zero.setHighBits(Val);
         // setHighBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
+      } else if (isReservedConst(I->Ops[1])) {
+	// we don't synthesize '0' as constant
+	Result.Zero.setHighBits(1);
+	return Result;
       } else {
+	auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
+	auto minNum = 1 << (confirmedTrailingZeros - 1);
+	if (minNum > I->Width)
+	  Result.Zero.setAllBits();
+	else
+	  Result.Zero.setHighBits(minNum);
         return Result;
       }
     }
