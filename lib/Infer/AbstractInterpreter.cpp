@@ -63,8 +63,11 @@ namespace souper {
       }
     }
 
-    if (KB0.hasConflict() || KB1.hasConflict())
-      assert(false && "Conflicting KB information!");
+    for (auto Op : I->Ops) {
+      if (findKnownBits(Op, C, PartialEval).hasConflict()) {
+	assert(false && "Conflict KB");
+      }
+    }
 
     switch(I->K) {
     case Inst::Const:
@@ -228,20 +231,32 @@ namespace souper {
       } else if (isReservedConst(I->Ops[1])) {
 	// we don't synthesize '0' as constant
 	Result.Zero.setHighBits(1);
-	return Result;
       } else if (!KB1.isZero()) {
 	auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
 	auto minNum = 1 << (confirmedTrailingZeros - 1);
 	// otherwise, it's poison
 	if (minNum < I->Width)
 	  Result.Zero.setHighBits(minNum);
-        return Result;
       }
+
+      return Result;
     }
 //   case LShrExact:
 //     return "lshrexact";
-//   case AShr:
-//     return "ashr";
+    case Inst::AShr: {
+      auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
+      auto minNum = 1 << (confirmedTrailingZeros - 1);
+      if (KB0.One.isSignBitSet()) {
+	// confirmed: sign bit = 1
+	if (minNum < I->Width)
+	  Result.One.setHighBits(minNum + 1);
+      } else if (KB0.Zero.isSignBitSet()) {
+	// confirmed: sign bit = 0
+	if (minNum < I->Width)
+	  Result.Zero.setHighBits(minNum + 1);
+      }
+      return Result;
+    }
 //   case AShrExact:
 //     return "ashrexact";
 //   case Select:
