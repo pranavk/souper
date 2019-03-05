@@ -217,8 +217,8 @@ namespace souper {
         if (Val < 0 || Val >= I->Width) {
           return Result;
         }
-        Op0KB.One <<= Val;
-        Op0KB.Zero <<= Val;
+        Op0KB.One.lshrInPlace(Val);
+        Op0KB.Zero.lshrInPlace(Val);
         Op0KB.Zero.setHighBits(Val);
         // setHighBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
@@ -256,6 +256,7 @@ namespace souper {
       } else {
         return Result;
       }
+      // pranavk: what!
       if ((Other.Zero & 1) != 0) {
         Result.Zero.setBit(0);
         return Result;
