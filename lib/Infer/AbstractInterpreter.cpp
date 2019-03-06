@@ -111,8 +111,22 @@ namespace souper {
       return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/true,
                                                Op0KB, Op1KB);
     }
-//   case Mul:
-//     return "mul";
+    case Inst::Mul: {
+      auto trailingZeros0 = KB0.countMinTrailingZeros();
+      auto trailingZeros1 = KB1.countMinTrailingZeros();
+      Result.Zero.setLowBits(trailingZeros0 + trailingZeros1);
+
+      // check for leading zeros
+      auto lz0 = I->Width - KB0.countMinLeadingZeros();
+      auto lz1 = I->Width - KB1.countMinLeadingZeros();
+      auto min = std::min(lz0, lz1);
+      auto max = std::max(lz0, lz1);
+      auto resultSize = max + (min - 1);
+      if (resultSize < I->Width)
+	Result.Zero.setHighBits(I->Width - resultSize);
+
+      return Result;
+    }
 //   case MulNSW:
 //     return "mulnsw";
 //   case MulNUW:
@@ -209,12 +223,6 @@ namespace souper {
 
       return Result;
     }
-//   case ShlNSW:
-//     return "shlnsw";
-//   case ShlNUW:
-//     return "shlnuw";
-//   case ShlNW:
-//     return "shlnw";
     case Inst::LShr : {
       auto Op0KB = KB0;
       auto Op1V = VAL(I->Ops[1]);
