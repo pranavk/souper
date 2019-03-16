@@ -14,6 +14,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Infer/Interpreter.h"
+#inculde "souper/Infer/AbstractInterpreter.h"
 #include "souper/Inst/Inst.h"
 #include "gtest/gtest.h"
 
@@ -45,13 +46,65 @@ namespace {
     return false;
   }
 
+  enum class Tristate { Unknown, False, True };
+
+  bool isConcrete(KnownBits x) { return (x.Zero | x.One).isAllOnesValue(); }
+
+  Tristate merge(APInt a, APInt b) {
+    return (a == b) ? a : Tristate::Unknown;
+  }
+
+  KnownBits setLowest(KnownBits x) {
+    for (int i = 0; i < x.getBitWidth(); i++) {
+      if (!x.Zero[i] && !x.One[i]) {
+	x.One.setBit(i);
+	return x;
+      }
+    }
+    assert(false);
+    return x;
+  }
+
+  KnownBits clearLowest(KnownBits x) {
+    for (int i = 0; i < x.getBitWidth(); i++) {
+      if (!x.Zero[i] && !x.One[i]) {
+	x.Zero.setBit(i);
+	return x;
+      }
+    }
+    assert(false);
+    return x;
+  }
+
+  APInt bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
+    if (!isConcrete(x))
+      return merge(bruteForce(setLowest(x), y, Pred),
+		   bruteForce(clearLowest(x), y, Pred));
+    if (!isConcrete(y))
+      return merge(bruteForce(x, setLowest(y), Pred),
+		   bruteForce(x, clearLowest(y), Pred));
+    auto xc = x.getConstant();
+    auto yc = y.getConstant();
+    APInt res;
+    switch (Pred) {
+    case Inst::Add:
+      res = xc + yc;
+      break;
+    default:
+      //llvm::report_fatal_error("no implementation for predicate");
+    }
+    return res;
+  }
+
   void testFn(Inst::Kind pred) {
     llvm::KnownBits x(WIDTH);
     do {
       llvm::KnownBits y(WIDTH);
       do {
 	switch(pred) {
-
+	case Inst::Add:
+	  BinaryTransferFunctionsKB(x, y);
+	  break;
 	}
       } while(nextKB(y));
     } while(nextKB(x));

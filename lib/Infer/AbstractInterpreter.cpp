@@ -243,29 +243,26 @@ namespace souper {
   llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
 
-    /*
-    EvalValue RootVal = VAL(I);
-    if (RootVal.hasValue()) {
-      Result.One = RootVal.getValue();
-      Result.Zero = ~RootVal.getValue();
-      return Result;
-    } else { //if (isReservedConst(I)) {
-      // we don't synthesize number 0 as a constant
-      // how to express that?
-      return Result;
+/*    if (PartialEval && isConcrete(I)) {
+      auto RootVal = evaluateInst(I, C);
+      if (RootVal.hasValue()) {
+        Result.One = RootVal.getValue();
+        Result.Zero = ~RootVal.getValue();
+        return Result;
+      }
     }
-    */
+*/
 
     EvalValue RootVal = VAL(I);
     if (RootVal.hasValue()) {
       Result.One = RootVal.getValue();
       Result.Zero = ~RootVal.getValue();
       return Result;
-    } else { //if (isReservedConst(I)) {
+    } //else { //if (isReservedConst(I)) {
       // we don't synthesize number 0 as a constant
       // how to express that?
-      return Result;
-    }
+    //return Result;
+    //}
 
     for (auto Op : I->Ops) {
       if (findKnownBits(Op, C, PartialEval).hasConflict()) {
