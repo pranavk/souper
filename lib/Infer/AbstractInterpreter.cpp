@@ -1,6 +1,194 @@
 #include "souper/Infer/Interpreter.h"
+#include "souper/Infer/AbstractInterpreter.h"
 
 namespace souper {
+
+  namespace BinaryTransferFunctionsKB {
+    llvm::KnownBits add(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
+                                               lhs, rhs);
+    }
+    llvm::KnownBits addnsw(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/true,
+                                               lhs, rhs);
+    }
+    llvm::KnownBits sub(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/false,
+                                               lhs, rhs);
+    }
+    llvm::KnownBits subnsw(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/true,
+                                               lhs, rhs);
+    }
+    llvm::KnownBits mul(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(lhs.getBitWidth());
+
+      auto trailingZeros0 = lhs.countMinTrailingZeros();
+      auto trailingZeros1 = rhs.countMinTrailingZeros();
+      Result.Zero.setLowBits(trailingZeros0 + trailingZeros1);
+
+      // check for leading zeros
+      auto lz0 = lhs.getBitWidth() - lhs.countMinLeadingZeros();
+      auto lz1 = rhs.getBitWidth() - rhs.countMinLeadingZeros();
+      auto min = std::min(lz0, lz1);
+      auto max = std::max(lz0, lz1);
+      auto resultSize = max + (min - 1);
+      if (resultSize < lhs.getBitWidth())
+	Result.Zero.setHighBits(lhs.getBitWidth() - resultSize);
+
+      return Result;
+    }
+    llvm::KnownBits udiv(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(lhs.getBitWidth());
+      const auto width = Result.getBitWidth();
+
+      unsigned LeadZ = lhs.countMinLeadingZeros();
+      unsigned RHSMaxLeadingZeros = rhs.countMaxLeadingZeros();
+      if (RHSMaxLeadingZeros != width)
+        LeadZ = std::min(width, LeadZ + width - RHSMaxLeadingZeros - 1);
+      Result.Zero.setHighBits(LeadZ);
+      return Result;
+    }
+    llvm::KnownBits urem(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(lhs.getBitWidth());
+      const auto width = Result.getBitWidth();
+
+      if (rhs.isConstant()) {
+        auto RA = rhs.getConstant();
+        if (RA.isPowerOf2()) {
+          auto LowBits = (RA - 1);
+          Result = lhs;
+          Result.Zero |= ~LowBits;
+          Result.One &= LowBits;
+          return Result;
+        }
+      }
+
+      unsigned Leaders =
+        std::max(lhs.countMinLeadingZeros(), rhs.countMinLeadingZeros());
+      Result.resetAll();
+      Result.Zero.setHighBits(Leaders);
+      return Result;
+    }
+    llvm::KnownBits and_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      auto Op0KB = lhs;
+      auto Op1KB = rhs;
+
+      Op0KB.One &= Op1KB.One;
+      Op0KB.Zero |= Op1KB.Zero;
+      return Op0KB;
+    }
+    llvm::KnownBits or_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      auto Op0KB = lhs;
+      auto Op1KB = rhs;
+
+      Op0KB.One |= Op1KB.One;
+      Op0KB.Zero &= Op1KB.Zero;
+      return Op0KB;
+    }
+    llvm::KnownBits xor_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      auto Op0KB = lhs;
+      auto Op1KB = rhs;
+      llvm::APInt KnownZeroOut =
+        (Op0KB.Zero & Op1KB.Zero) | (Op0KB.One & Op1KB.One);
+      Op0KB.One = (Op0KB.Zero & Op1KB.One) | (Op0KB.One & Op1KB.Zero);
+      Op0KB.Zero = std::move(KnownZeroOut);
+      // ^ logic copied from LLVM ValueTracking.cpp
+      return Op0KB;
+    }
+    llvm::KnownBits shl(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(lhs.getBitWidth());
+      const auto width = Result.getBitWidth();
+
+      auto Op0KB = lhs;
+      if (rhs.isConstant()) {
+        auto Val = rhs.getConstant().getLimitedValue();
+        if (Val < 0 || Val >= width) {
+          return Result;
+        }
+        Op0KB.One <<= Val;
+        Op0KB.Zero <<= Val;
+        Op0KB.Zero.setLowBits(Val);
+        // setLowBits takes an unsigned int, so getLimitedValue is harmless
+        return Op0KB;
+      } else if (!rhs.isZero()) {
+	auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
+	auto minNum = 1 << (confirmedTrailingZeros - 1);
+	// otherwise, it's poison
+	if (minNum < width)
+	  Result.Zero.setLowBits(minNum);
+      }
+
+      return Result;
+    }
+    llvm::KnownBits lhsr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(lhs.getBitWidth());
+      const auto width = Result.getBitWidth();
+
+      auto Op0KB = lhs;
+      if (rhs.isConstant()) {
+        auto Val = rhs.getConstant().getLimitedValue();
+        if (Val < 0 || Val >= width) {
+          return Result;
+        }
+        Op0KB.One.lshrInPlace(Val);
+        Op0KB.Zero.lshrInPlace(Val);
+        Op0KB.Zero.setHighBits(Val);
+        // setHighBits takes an unsigned int, so getLimitedValue is harmless
+        return Op0KB;
+      } else if (!rhs.isZero()) {
+	auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
+	auto minNum = 1 << (confirmedTrailingZeros - 1);
+	// otherwise, it's poison
+	if (minNum < width)
+	  Result.Zero.setHighBits(minNum);
+      }
+
+      return Result;
+    }
+    llvm::KnownBits ashr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(lhs.getBitWidth());
+      const auto width = Result.getBitWidth();
+
+      auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
+      auto minNum = 1 << (confirmedTrailingZeros - 1);
+      if (lhs.One.isSignBitSet()) {
+	// confirmed: sign bit = 1
+	if (minNum < width)
+	  Result.One.setHighBits(minNum + 1);
+      } else if (lhs.Zero.isSignBitSet()) {
+	// confirmed: sign bit = 0
+	if (minNum < width)
+	  Result.Zero.setHighBits(minNum + 1);
+      }
+      return Result;
+    }
+    llvm::KnownBits eq(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(1);
+      if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant())) {
+	Result.One.setBit(0);
+	return Result;
+      }
+      if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0)) {
+	Result.Zero.setBit(0);
+	return Result;
+      }
+      return Result;
+    }
+    llvm::KnownBits ne(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(1);
+      auto Op0KB = lhs;
+      auto Op1KB = rhs;
+      llvm::APInt Cond = (Op0KB.Zero & ~Op1KB.One) | (Op0KB.One & ~Op1KB.Zero);
+      bool Conflict = Cond != 0;
+      if (Conflict) {
+        Result.One.setBit(0);
+        return Result;
+      }
+      return Result;
+    }
+  }
+
   bool isReservedConst(Inst *I) {
     return I->K == Inst::ReservedConst ||
           (I->K == Inst::Var &&
@@ -35,7 +223,7 @@ namespace souper {
   }
 
   EvalValue getValue(Inst *I, ValueCache &C, bool PartialEval) {
-    if (I->K == Inst::Const)
+    if (I->K == Inst::Const)// || I->K == Inst::Var)
       return {I->Val};
     if (C.find(I) != C.end()) {
       return C[I];
@@ -54,13 +242,29 @@ namespace souper {
 
   llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
-    if (PartialEval && isConcrete(I)) {
-      auto RootVal = evaluateInst(I, C);
-      if (RootVal.hasValue()) {
-        Result.One = RootVal.getValue();
-        Result.Zero = ~RootVal.getValue();
-        return Result;
-      }
+
+    /*
+    EvalValue RootVal = VAL(I);
+    if (RootVal.hasValue()) {
+      Result.One = RootVal.getValue();
+      Result.Zero = ~RootVal.getValue();
+      return Result;
+    } else { //if (isReservedConst(I)) {
+      // we don't synthesize number 0 as a constant
+      // how to express that?
+      return Result;
+    }
+    */
+
+    EvalValue RootVal = VAL(I);
+    if (RootVal.hasValue()) {
+      Result.One = RootVal.getValue();
+      Result.Zero = ~RootVal.getValue();
+      return Result;
+    } else { //if (isReservedConst(I)) {
+      // we don't synthesize number 0 as a constant
+      // how to express that?
+      return Result;
     }
 
     for (auto Op : I->Ops) {
@@ -86,46 +290,21 @@ namespace souper {
     case Inst::AddNUW :
     case Inst::AddNW :
     case Inst::Add: {
-      const auto &Op0KB = KB0;
-      const auto &Op1KB = KB1;
-      return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
-                                               Op0KB, Op1KB);
+      return BinaryTransferFunctionsKB::add(KB0, KB1);
     }
     case Inst::AddNSW: {
-      const auto &Op0KB = KB0;
-      const auto &Op1KB = KB1;
-      return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/true,
-                                               Op0KB, Op1KB);
+      return BinaryTransferFunctionsKB::addnsw(KB0, KB1);
     }
     case Inst::SubNUW :
     case Inst::SubNW :
     case Inst::Sub: {
-      const auto &Op0KB = KB0;
-      const auto &Op1KB = KB1;
-      return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/false,
-                                               Op0KB, Op1KB);
+      return BinaryTransferFunctionsKB::sub(KB0, KB1);
     }
     case Inst::SubNSW: {
-      const auto &Op0KB = KB0;
-      const auto &Op1KB = KB1;
-      return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/true,
-                                               Op0KB, Op1KB);
+      return BinaryTransferFunctionsKB::subnsw(KB0, KB1);
     }
     case Inst::Mul: {
-      auto trailingZeros0 = KB0.countMinTrailingZeros();
-      auto trailingZeros1 = KB1.countMinTrailingZeros();
-      Result.Zero.setLowBits(trailingZeros0 + trailingZeros1);
-
-      // check for leading zeros
-      auto lz0 = I->Width - KB0.countMinLeadingZeros();
-      auto lz1 = I->Width - KB1.countMinLeadingZeros();
-      auto min = std::min(lz0, lz1);
-      auto max = std::max(lz0, lz1);
-      auto resultSize = max + (min - 1);
-      if (resultSize < I->Width)
-	Result.Zero.setHighBits(I->Width - resultSize);
-
-      return Result;
+      return BinaryTransferFunctionsKB::mul(KB0, KB1);
     }
 //   case MulNSW:
 //     return "mulnsw";
@@ -134,12 +313,8 @@ namespace souper {
 //   case MulNW:
 //     return "mulnw";
     case Inst::UDiv: {
-      unsigned LeadZ = KB0.countMinLeadingZeros();
-      unsigned RHSMaxLeadingZeros = KB1.countMaxLeadingZeros();
-      if (RHSMaxLeadingZeros != I->Width)
-        LeadZ = std::min(I->Width, LeadZ + I->Width - RHSMaxLeadingZeros - 1);
-      Result.Zero.setHighBits(LeadZ);
-      return Result;
+      return BinaryTransferFunctionsKB::udiv(KB0, KB1);
+
     }
 //   case SDiv:
 //     return "sdiv";
@@ -148,56 +323,24 @@ namespace souper {
 //   case SDivExact:
 //     return "sdivexact";
     case Inst::URem: {
-      auto Op1V = VAL(I->Ops[1]);
-      if (Op1V.hasValue()) {
-        auto RA = Op1V.getValue();
-        if (RA.isPowerOf2()) {
-          auto LowBits = (RA - 1);
-          Result = KB0;
-          Result.Zero |= ~LowBits;
-          Result.One &= LowBits;
-          return Result;
-        }
-      }
-
-      unsigned Leaders =
-        std::max(KB0.countMinLeadingZeros(), KB1.countMinLeadingZeros());
-      Result.resetAll();
-      Result.Zero.setHighBits(Leaders);
-      return Result;
+      return BinaryTransferFunctionsKB::urem(KB0, KB1);
     }
 //   case SRem:
 //     return "srem";
     case Inst::And : {
-      auto Op0KB = KB0;
-      auto Op1KB = KB1;
-
-      Op0KB.One &= Op1KB.One;
-      Op0KB.Zero |= Op1KB.Zero;
-      return Op0KB;
+      return BinaryTransferFunctionsKB::and_(KB0, KB1);
     }
     case Inst::Or : {
-      auto Op0KB = KB0;
-      auto Op1KB = KB1;
-
-      Op0KB.One |= Op1KB.One;
-      Op0KB.Zero &= Op1KB.Zero;
-      return Op0KB;
+      return BinaryTransferFunctionsKB::or_(KB0, KB1);
     }
     case Inst::Xor : {
-      auto Op0KB = KB0;
-      auto Op1KB = KB1;
-      llvm::APInt KnownZeroOut =
-        (Op0KB.Zero & Op1KB.Zero) | (Op0KB.One & Op1KB.One);
-      Op0KB.One = (Op0KB.Zero & Op1KB.One) | (Op0KB.One & Op1KB.Zero);
-      Op0KB.Zero = std::move(KnownZeroOut);
-      // ^ logic copied from LLVM ValueTracking.cpp
-      return Op0KB;
+      return BinaryTransferFunctionsKB::xor_(KB0, KB1);
     }
     case Inst::ShlNSW :
     case Inst::ShlNUW :
     case Inst::ShlNW : // TODO: Rethink if these make sense
     case Inst::Shl : {
+      /*
       auto Op0KB = KB0;
       auto Op1V = VAL(I->Ops[1]);
 
@@ -214,16 +357,19 @@ namespace souper {
       } else if (isReservedConst(I->Ops[1])) {
         Result.Zero.setLowBits(1);
       } else if (!KB1.isZero()) {
-	auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
-	auto minNum = 1 << (confirmedTrailingZeros - 1);
-	// otherwise, it's poison
-	if (minNum < I->Width)
-	  Result.Zero.setLowBits(minNum);
+       auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
+       auto minNum = 1 << (confirmedTrailingZeros - 1);
+       // otherwise, it's poison
+       if (minNum < I->Width)
+         Result.Zero.setLowBits(minNum);
       }
 
       return Result;
+      */
+      return BinaryTransferFunctionsKB::shl(KB0, KB1);
     }
     case Inst::LShr : {
+      /*
       auto Op0KB = KB0;
       auto Op1V = VAL(I->Ops[1]);
       if (Op1V.hasValue()) {
@@ -237,33 +383,24 @@ namespace souper {
         // setHighBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
       } else if (isReservedConst(I->Ops[1])) {
-	// we don't synthesize '0' as constant
-	Result.Zero.setHighBits(1);
+       // we don't synthesize '0' as constant
+       Result.Zero.setHighBits(1);
       } else if (!KB1.isZero()) {
-	auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
-	auto minNum = 1 << (confirmedTrailingZeros - 1);
-	// otherwise, it's poison
-	if (minNum < I->Width)
-	  Result.Zero.setHighBits(minNum);
+       auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
+       auto minNum = 1 << (confirmedTrailingZeros - 1);
+       // otherwise, it's poison
+       if (minNum < I->Width)
+         Result.Zero.setHighBits(minNum);
       }
 
       return Result;
+      */
+      return BinaryTransferFunctionsKB::lhsr(KB0, KB1);
     }
 //   case LShrExact:
 //     return "lshrexact";
     case Inst::AShr: {
-      auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
-      auto minNum = 1 << (confirmedTrailingZeros - 1);
-      if (KB0.One.isSignBitSet()) {
-	// confirmed: sign bit = 1
-	if (minNum < I->Width)
-	  Result.One.setHighBits(minNum + 1);
-      } else if (KB0.Zero.isSignBitSet()) {
-	// confirmed: sign bit = 0
-	if (minNum < I->Width)
-	  Result.Zero.setHighBits(minNum + 1);
-      }
-      return Result;
+      return BinaryTransferFunctionsKB::ashr(KB0, KB1);
     }
 //   case AShrExact:
 //     return "ashrexact";
@@ -299,17 +436,11 @@ namespace souper {
       } else {
         return Result;
       }
+
+      return BinaryTransferFunctionsKB::eq(KB0, KB1);
     }
     case Inst::Ne: {
-      auto Op0KB = KB0;
-      auto Op1KB = KB1;
-      llvm::APInt Cond = (Op0KB.Zero & ~Op1KB.One) | (Op0KB.One & ~Op1KB.Zero);
-      bool Conflict = Cond != 0;
-      if (Conflict) {
-        Result.One.setBit(0);
-        return Result;
-      }
-      return Result;
+      return BinaryTransferFunctionsKB::ne(KB0, KB1);
     }
 //   case Ult:
 //     return "ult";

@@ -19,6 +19,52 @@
 
 using namespace souper;
 
+// width used for xfer tests
+constexpr int WIDTH = 4;
+
+namespace {
+
+  bool nextKB(llvm::KnownBits &x) {
+    for (int i = 0; i < x.getBitWidth(); i++) {
+      if (!x.Zero[i] && !x.One[i]) {
+	x.Zero.setBit(i);
+	return true;
+      }
+      if (x.Zero[i] && !x.One[i]) {
+	x.Zero.clearBit(i);
+	x.One.setBit(i);
+	return true;
+      }
+      if (!x.Zero[i] && x.One[i]) {
+	x.Zero.clearBit(i);
+	x.One.clearBit(i);
+	continue;
+      }
+      assert(false && "error in nextKB");
+    }
+    return false;
+  }
+
+  void testFn(Inst::Kind pred) {
+    llvm::KnownBits x(WIDTH);
+    do {
+      llvm::KnownBits y(WIDTH);
+      do {
+	switch(pred) {
+
+	}
+      } while(nextKB(y));
+    } while(nextKB(x));
+  }
+
+} // anon
+
+TEST(InterpreterTests, KBTransferFunctions) {
+
+
+  testFn(Inst::Add);
+}
+
 TEST(InterpreterTests, KnownBits) {
   InstContext IC;
 
