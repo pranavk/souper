@@ -27,7 +27,8 @@ namespace souper {
 
       auto trailingZeros0 = lhs.countMinTrailingZeros();
       auto trailingZeros1 = rhs.countMinTrailingZeros();
-      Result.Zero.setLowBits(trailingZeros0 + trailingZeros1);
+      //std::cout <<  lhs.getBitWidth() << " " << trailingZeros0 << " " << trailingZeros1 << std::endl;
+      Result.Zero.setLowBits(std::min(trailingZeros0 + trailingZeros1, lhs.getBitWidth()));
 
       // check for leading zeros
       auto lz0 = lhs.getBitWidth() - lhs.countMinLeadingZeros();

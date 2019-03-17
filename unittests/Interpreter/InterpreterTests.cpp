@@ -190,16 +190,20 @@ namespace {
     break;
     case Inst::LShr:
     {
-      auto rc = xc.lshr(yc.getLimitedValue());
-      res.One = rc;
-      res.Zero = ~rc;
+      if (yc.getLimitedValue() < res.getBitWidth()) {
+	auto rc = xc.lshr(yc.getLimitedValue());
+	res.One = rc;
+	res.Zero = ~rc;
+      }
     }
     break;
     case Inst::AShr:
     {
-      auto rc = xc.ashr(yc.getLimitedValue());
-      res.One = rc;
-      res.Zero = ~rc;
+      if (yc.getLimitedValue() < res.getBitWidth()) {
+	auto rc = xc.ashr(yc.getLimitedValue());
+	res.One = rc;
+	res.Zero = ~rc;
+      }
     }
     break;
     case Inst::Eq:
@@ -227,7 +231,7 @@ namespace {
     return res;
   }
 
-  void testFn(Inst::Kind pred) {
+  bool testFn(Inst::Kind pred) {
     llvm::KnownBits x(WIDTH);
     do {
       llvm::KnownBits y(WIDTH);
@@ -281,37 +285,48 @@ namespace {
 	}
 
 	KnownBits Res2 = bruteForce(x, y, pred);
-	assert(Res1.getBitWidth() == Res2.getBitWidth() && "unsound!");
-	assert(!Res1.hasConflict() && !Res2.hasConflict() && "conflict detected!");
+	if (Res1.getBitWidth() != Res2.getBitWidth()) {
+	  llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
+		       << Res2.getBitWidth() << ", Given: " << Res1.getBitWidth() << '\n';
+	  return false;
+	}
+	if (Res1.hasConflict() || Res2.hasConflict()) {
+	  llvm::errs() << "Expected or Given result has a conflict\n";
+	  return false;
+	}
 
-	//std::cout << "Res1: " << knownBitsString(Res1) << std::endl;
-	//std::cout << "Res2: " << knownBitsString(Res2) << std::endl;
 	for (unsigned i = 0; i < Res1.getBitWidth(); i++) {
-	  if (Res1.One[i] && Res2.Zero[i]) {
-	    assert(false && "unsound !!!");
+	  if ((Res1.Zero[i] and Res2.One[i]) || (Res1.One[i] and Res2.Zero[i])) {
+	    std::cout << "Unsound!! " << Inst::getKindName(pred) << std::endl;
+	    std::cout << knownBitsString(x) << ' ' << Inst::getKindName(pred)
+		      << ' ' << knownBitsString(y) << std::endl;
+	    std::cout << "Calculated: " << knownBitsString(Res1) << '\n';
+	    std::cout << "Expected: " << knownBitsString(Res2) << '\n';
+	    return false;
 	  }
 	}
 
       } while(nextKB(y));
     } while(nextKB(x));
-  }
 
+    return true;
+  }
 } // anon
 
 TEST(InterpreterTests, KBTransferFunctions) {
-  testFn(Inst::Add);
-  testFn(Inst::Sub);
-  testFn(Inst::Mul);
-  testFn(Inst::UDiv);
-  testFn(Inst::URem);
-  testFn(Inst::And);
-  testFn(Inst::Or);
-  testFn(Inst::Xor);
-  testFn(Inst::Shl);
-  testFn(Inst::LShr);
-  testFn(Inst::AShr);
-  testFn(Inst::Eq);
-  testFn(Inst::Ne);
+  ASSERT_TRUE(testFn(Inst::Add));
+  ASSERT_TRUE(testFn(Inst::Sub));
+  ASSERT_TRUE(testFn(Inst::Mul));
+  ASSERT_TRUE(testFn(Inst::UDiv));
+  ASSERT_TRUE(testFn(Inst::URem));
+  ASSERT_TRUE(testFn(Inst::And));
+  ASSERT_TRUE(testFn(Inst::Or));
+  ASSERT_TRUE(testFn(Inst::Xor));
+  ASSERT_TRUE(testFn(Inst::Shl));
+  ASSERT_TRUE(testFn(Inst::LShr));
+  ASSERT_TRUE(testFn(Inst::AShr));
+  ASSERT_TRUE(testFn(Inst::Eq));
+  ASSERT_TRUE(testFn(Inst::Ne));
 }
 
 TEST(InterpreterTests, KnownBits) {
