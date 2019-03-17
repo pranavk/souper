@@ -123,7 +123,7 @@ namespace souper {
 
       return Result;
     }
-    llvm::KnownBits lhsr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits lshr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
 
@@ -394,7 +394,7 @@ namespace souper {
 
       return Result;
       */
-      return BinaryTransferFunctionsKB::lhsr(KB0, KB1);
+      return BinaryTransferFunctionsKB::lshr(KB0, KB1);
     }
 //   case LShrExact:
 //     return "lshrexact";

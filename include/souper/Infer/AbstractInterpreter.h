@@ -15,7 +15,7 @@ namespace souper {
     llvm::KnownBits or_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits xor_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits shl(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
-    llvm::KnownBits lhsr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
+    llvm::KnownBits lshr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits ashr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits zext(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits sext(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);

@@ -117,6 +117,8 @@ namespace {
 
     KnownBits res(x.getBitWidth());
     switch (Pred) {
+    case Inst::AddNUW:
+    case Inst::AddNW:
     case Inst::Add:
     {
       auto rc = xc + yc;
@@ -124,11 +126,98 @@ namespace {
       res.Zero = ~rc;
     }
     break;
+    case Inst::SubNUW:
+    case Inst::SubNW:
     case Inst::Sub:
     {
       auto rc = xc - yc;
       res.One = rc;
       res.Zero = ~rc;
+    }
+    break;
+    case Inst::Mul:
+    {
+      auto rc = xc * yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+      break;
+    case Inst::UDiv:
+    {
+      if (yc != 0) {
+	auto rc = xc.udiv(yc);
+	res.One = rc;
+	res.Zero = ~rc;
+      }
+    }
+    break;
+    case Inst::URem:
+    {
+      if (yc != 0) {
+	auto rc = xc.urem(yc);
+	res.One = rc;
+	res.Zero = ~rc;
+      }
+    }
+    break;
+    case Inst::And:
+    {
+      auto rc = xc & yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::Or:
+    {
+      auto rc = xc | yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::Xor:
+    {
+      auto rc = xc ^ yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::Shl:
+    {
+      auto rc = xc << yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::LShr:
+    {
+      auto rc = xc.lshr(yc.getLimitedValue());
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::AShr:
+    {
+      auto rc = xc.ashr(yc.getLimitedValue());
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::Eq:
+    {
+      res = KnownBits(1);
+      if (xc.eq(yc))
+	res.One.setBit(0);
+      else
+      	res.Zero.setBit(0);
+    }
+    break;
+    case Inst::Ne:
+    {
+      res = KnownBits(1);
+      if (xc.ne(yc))
+	res.Zero.setBit(0);
+      else
+	res.One.setBit(0);
     }
     break;
     default:
@@ -146,8 +235,48 @@ namespace {
 	KnownBits Res1;
 
 	switch(pred) {
+	case Inst::AddNUW:
+	case Inst::AddNW:
 	case Inst::Add:
 	  Res1 = BinaryTransferFunctionsKB::add(x, y);
+	  break;
+	case Inst::SubNUW:
+	case Inst::SubNW:
+	case Inst::Sub:
+	  Res1 = BinaryTransferFunctionsKB::sub(x, y);
+	  break;
+	case Inst::Mul:
+	  Res1 = BinaryTransferFunctionsKB::mul(x, y);
+	  break;
+	case Inst::UDiv:
+	  Res1 = BinaryTransferFunctionsKB::udiv(x, y);
+	  break;
+	case Inst::URem:
+	  Res1 = BinaryTransferFunctionsKB::urem(x, y);
+	  break;
+	case Inst::And:
+	  Res1 = BinaryTransferFunctionsKB::and_(x, y);
+	  break;
+	case Inst::Or:
+	  Res1 = BinaryTransferFunctionsKB::or_(x, y);
+	  break;
+	case Inst::Xor:
+	  Res1 = BinaryTransferFunctionsKB::xor_(x, y);
+	  break;
+	case Inst::Shl:
+	  Res1 = BinaryTransferFunctionsKB::shl(x, y);
+	  break;
+	case Inst::LShr:
+	  Res1 = BinaryTransferFunctionsKB::lshr(x, y);
+	  break;
+	case Inst::AShr:
+	  Res1 = BinaryTransferFunctionsKB::ashr(x, y);
+	  break;
+	case Inst::Eq:
+	  Res1 = BinaryTransferFunctionsKB::eq(x, y);
+	  break;
+	case Inst::Ne:
+	  Res1 = BinaryTransferFunctionsKB::ne(x, y);
 	  break;
 	}
 
@@ -171,6 +300,18 @@ namespace {
 
 TEST(InterpreterTests, KBTransferFunctions) {
   testFn(Inst::Add);
+  testFn(Inst::Sub);
+  testFn(Inst::Mul);
+  testFn(Inst::UDiv);
+  testFn(Inst::URem);
+  testFn(Inst::And);
+  testFn(Inst::Or);
+  testFn(Inst::Xor);
+  testFn(Inst::Shl);
+  testFn(Inst::LShr);
+  testFn(Inst::AShr);
+  testFn(Inst::Eq);
+  testFn(Inst::Ne);
 }
 
 TEST(InterpreterTests, KnownBits) {
