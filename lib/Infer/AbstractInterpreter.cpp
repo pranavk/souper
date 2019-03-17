@@ -184,19 +184,6 @@ namespace souper {
       if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0))
 	Result.One.setBit(0);
       return Result;
-
-      /*
-      // This was proved unsound by unittests
-      auto Op0KB = lhs;
-      auto Op1KB = rhs;
-      llvm::APInt Cond = (Op0KB.Zero & ~Op1KB.One) | (Op0KB.One & ~Op1KB.Zero);
-      bool Conflict = Cond != 0;
-      if (Conflict) {
-        Result.One.setBit(0);
-        return Result;
-      }
-      return Result;
-      */
     }
   }
 
@@ -254,26 +241,12 @@ namespace souper {
   llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
 
-/*    if (PartialEval && isConcrete(I)) {
-      auto RootVal = evaluateInst(I, C);
-      if (RootVal.hasValue()) {
-        Result.One = RootVal.getValue();
-        Result.Zero = ~RootVal.getValue();
-        return Result;
-      }
-    }
-*/
-
     EvalValue RootVal = VAL(I);
     if (RootVal.hasValue()) {
       Result.One = RootVal.getValue();
       Result.Zero = ~RootVal.getValue();
       return Result;
-    } //else { //if (isReservedConst(I)) {
-      // we don't synthesize number 0 as a constant
-      // how to express that?
-    //return Result;
-    //}
+    }
 
     for (auto Op : I->Ops) {
       if (findKnownBits(Op, C, PartialEval).hasConflict()) {
@@ -282,18 +255,6 @@ namespace souper {
     }
 
     switch(I->K) {
-      // This is useless now
-    case Inst::Const:
-    case Inst::Var : {
-      EvalValue V = VAL(I);
-      if (V.hasValue()) {
-        Result.One = V.getValue();
-        Result.Zero = ~V.getValue();
-        return Result;
-      } else {
-        return Result;
-      }
-    }
 //   case Phi:
 //     return "phi";
     case Inst::AddNUW :
@@ -349,33 +310,6 @@ namespace souper {
     case Inst::ShlNUW :
     case Inst::ShlNW : // TODO: Rethink if these make sense
     case Inst::Shl : {
-      /*
-      auto Op0KB = KB0;
-      auto Op1V = VAL(I->Ops[1]);
-
-      if (Op1V.hasValue()) {
-        auto Val = Op1V.getValue().getLimitedValue();
-        if (Val < 0 || Val >= I->Width) {
-          return Result;
-        }
-        Op0KB.One <<= Val;
-        Op0KB.Zero <<= Val;
-        Op0KB.Zero.setLowBits(Val);
-        // setLowBits takes an unsigned int, so getLimitedValue is harmless
-        return Op0KB;
-      } else if (isReservedConst(I->Ops[1])) {
-        Result.Zero.setLowBits(1);
-      } else if (!KB1.isZero()) {
-       auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
-       auto minNum = 1 << (confirmedTrailingZeros - 1);
-       // otherwise, it's poison
-       if (minNum < I->Width)
-         Result.Zero.setLowBits(minNum);
-      }
-
-      return Result;
-      */
-
       // we can't easily put following condition inside
       // BinaryTransferFunctionsKB but this one gives significant pruning; so,
       // let's keep it here.
@@ -388,33 +322,6 @@ namespace souper {
       return BinaryTransferFunctionsKB::shl(KB0, KB1);
     }
     case Inst::LShr : {
-      /*
-      auto Op0KB = KB0;
-      auto Op1V = VAL(I->Ops[1]);
-      if (Op1V.hasValue()) {
-        auto Val = Op1V.getValue().getLimitedValue();
-        if (Val < 0 || Val >= I->Width) {
-          return Result;
-        }
-        Op0KB.One.lshrInPlace(Val);
-        Op0KB.Zero.lshrInPlace(Val);
-        Op0KB.Zero.setHighBits(Val);
-        // setHighBits takes an unsigned int, so getLimitedValue is harmless
-        return Op0KB;
-      } else if (isReservedConst(I->Ops[1])) {
-       // we don't synthesize '0' as constant
-       Result.Zero.setHighBits(1);
-      } else if (!KB1.isZero()) {
-       auto confirmedTrailingZeros = KB1.countMinTrailingZeros();
-       auto minNum = 1 << (confirmedTrailingZeros - 1);
-       // otherwise, it's poison
-       if (minNum < I->Width)
-         Result.Zero.setHighBits(minNum);
-      }
-
-      return Result;
-      */
-
       if (isReservedConst(I->Ops[1])) {
 	Result.Zero.setLowBits(1);
 	return Result;
@@ -441,6 +348,9 @@ namespace souper {
     }
 
     case Inst::Eq: {
+      // Below implementation, because it contains, isReservedConst, is
+      // difficult to put inside BinaryTransferFunctionsKB but it's able to
+      // prune more stuff.
       Inst *Constant = nullptr;
       llvm::KnownBits Other;
       if (isReservedConst(I->Ops[0])) {
@@ -461,6 +371,7 @@ namespace souper {
         return Result;
       }
 
+      // Fallback to our tested implmentation
       return BinaryTransferFunctionsKB::eq(KB0, KB1);
     }
     case Inst::Ne: {
