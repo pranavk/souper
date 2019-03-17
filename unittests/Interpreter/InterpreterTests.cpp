@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
+
 #include "souper/Infer/Interpreter.h"
-#inculde "souper/Infer/AbstractInterpreter.h"
+#include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Inst/Inst.h"
 #include "gtest/gtest.h"
 
+using namespace llvm;
 using namespace souper;
 
 // width used for xfer tests
@@ -50,8 +53,17 @@ namespace {
 
   bool isConcrete(KnownBits x) { return (x.Zero | x.One).isAllOnesValue(); }
 
-  Tristate merge(APInt a, APInt b) {
-    return (a == b) ? a : Tristate::Unknown;
+  KnownBits merge(KnownBits a, KnownBits b) {
+    assert(a.getBitWidth() == b.getBitWidth() && "Can only merge KnownBits of same width.");
+
+    KnownBits res(a.getBitWidth());
+    for (unsigned i = 0; i < a.getBitWidth(); i++) {
+      if (a.One[i] == b.One[i] && b.One[i])
+	a.One.setBit(i);
+      if (a.Zero[i] == b.Zero[i] && a.Zero[i])
+	a.Zero.setBit(i);
+    }
+    return res;
   }
 
   KnownBits setLowest(KnownBits x) {
@@ -76,7 +88,7 @@ namespace {
     return x;
   }
 
-  APInt bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
+  KnownBits bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
     if (!isConcrete(x))
       return merge(bruteForce(setLowest(x), y, Pred),
 		   bruteForce(clearLowest(x), y, Pred));
@@ -85,12 +97,25 @@ namespace {
 		   bruteForce(x, clearLowest(y), Pred));
     auto xc = x.getConstant();
     auto yc = y.getConstant();
-    APInt res;
+
+    KnownBits res(x.getBitWidth());
     switch (Pred) {
     case Inst::Add:
-      res = xc + yc;
-      break;
+    {
+      auto rc = xc + yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
+    case Inst::Sub:
+    {
+      auto rc = xc - yc;
+      res.One = rc;
+      res.Zero = ~rc;
+    }
+    break;
     default:
+      break;
       //llvm::report_fatal_error("no implementation for predicate");
     }
     return res;
@@ -101,11 +126,16 @@ namespace {
     do {
       llvm::KnownBits y(WIDTH);
       do {
+	KnownBits Res1;
 	switch(pred) {
 	case Inst::Add:
-	  BinaryTransferFunctionsKB(x, y);
+	  Res1 = BinaryTransferFunctionsKB::add(x, y);
 	  break;
 	}
+
+	KnownBits Res2 = bruteForce(x, y, pred);
+	if (Res1.One != Res2.One || Res1.Zero != Res2.Zero)
+	  assert(false && "unsound!!!");
       } while(nextKB(y));
     } while(nextKB(x));
   }
@@ -113,8 +143,6 @@ namespace {
 } // anon
 
 TEST(InterpreterTests, KBTransferFunctions) {
-
-
   testFn(Inst::Add);
 }
 
