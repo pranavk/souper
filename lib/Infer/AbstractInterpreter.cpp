@@ -180,6 +180,14 @@ namespace souper {
     }
     llvm::KnownBits ne(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
+
+      if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant()))
+	Result.Zero.setBit(0);
+      if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0))
+	Result.One.setBit(0);
+      return Result;
+
+      /*
       auto Op0KB = lhs;
       auto Op1KB = rhs;
       llvm::APInt Cond = (Op0KB.Zero & ~Op1KB.One) | (Op0KB.One & ~Op1KB.Zero);
@@ -189,6 +197,7 @@ namespace souper {
         return Result;
       }
       return Result;
+      */
     }
   }
 
