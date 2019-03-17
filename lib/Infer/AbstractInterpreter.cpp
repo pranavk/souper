@@ -40,18 +40,22 @@ namespace souper {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
                                                lhs, rhs);
     }
+
     llvm::KnownBits addnsw(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/true,
                                                lhs, rhs);
     }
+
     llvm::KnownBits sub(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/false,
                                                lhs, rhs);
     }
+
     llvm::KnownBits subnsw(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/true,
                                                lhs, rhs);
     }
+
     llvm::KnownBits mul(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
 
@@ -69,6 +73,7 @@ namespace souper {
 
       return Result;
     }
+
     llvm::KnownBits udiv(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
@@ -80,6 +85,7 @@ namespace souper {
       Result.Zero.setHighBits(LeadZ);
       return Result;
     }
+
     llvm::KnownBits urem(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
@@ -101,6 +107,7 @@ namespace souper {
       Result.Zero.setHighBits(Leaders);
       return Result;
     }
+
     llvm::KnownBits and_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       auto Op0KB = lhs;
       auto Op1KB = rhs;
@@ -109,6 +116,7 @@ namespace souper {
       Op0KB.Zero |= Op1KB.Zero;
       return Op0KB;
     }
+
     llvm::KnownBits or_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       auto Op0KB = lhs;
       auto Op1KB = rhs;
@@ -117,6 +125,7 @@ namespace souper {
       Op0KB.Zero &= Op1KB.Zero;
       return Op0KB;
     }
+
     llvm::KnownBits xor_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       auto Op0KB = lhs;
       auto Op1KB = rhs;
@@ -127,6 +136,7 @@ namespace souper {
       // ^ logic copied from LLVM ValueTracking.cpp
       return Op0KB;
     }
+
     llvm::KnownBits shl(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
@@ -152,6 +162,7 @@ namespace souper {
 
       return Result;
     }
+
     llvm::KnownBits lshr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
@@ -177,6 +188,7 @@ namespace souper {
 
       return Result;
     }
+
     llvm::KnownBits ashr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
@@ -194,6 +206,7 @@ namespace souper {
       }
       return Result;
     }
+
     llvm::KnownBits eq(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant())) {
@@ -206,6 +219,7 @@ namespace souper {
       }
       return Result;
     }
+
     llvm::KnownBits ne(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
 
@@ -215,6 +229,7 @@ namespace souper {
 	Result.One.setBit(0);
       return Result;
     }
+
     llvm::KnownBits ult(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getUMax(lhs).ult(getUMin(rhs)))
@@ -223,6 +238,7 @@ namespace souper {
 	Result.Zero.setBit(0);
       return Result;
     }
+
     llvm::KnownBits slt(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getSMax(lhs).slt(getSMin(rhs)))
@@ -231,6 +247,7 @@ namespace souper {
 	Result.Zero.setBit(0);
       return Result;
     }
+
     llvm::KnownBits ule(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getUMax(lhs).ule(getUMin(rhs)))
@@ -239,6 +256,7 @@ namespace souper {
 	Result.Zero.setBit(0);
       return Result;
     }
+
     llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getSMax(lhs).sle(getSMin(rhs)))
@@ -283,7 +301,7 @@ namespace souper {
   }
 
   EvalValue getValue(Inst *I, ValueCache &C, bool PartialEval) {
-    if (I->K == Inst::Const)// || I->K == Inst::Var)
+    if (I->K == Inst::Const)
       return {I->Val};
     if (C.find(I) != C.end()) {
       return C[I];
@@ -410,9 +428,9 @@ namespace souper {
     }
 
     case Inst::Eq: {
-      // Below implementation, because it contains, isReservedConst, is
+      // Below implementation, because it contains isReservedConst, is
       // difficult to put inside BinaryTransferFunctionsKB but it's able to
-      // prune more stuff.
+      // prune more stuff; so, let's keep both
       Inst *Constant = nullptr;
       llvm::KnownBits Other;
       if (isReservedConst(I->Ops[0])) {

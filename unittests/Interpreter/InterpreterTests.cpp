@@ -25,7 +25,7 @@
 using namespace llvm;
 using namespace souper;
 
-// width used for xfer tests
+// width used for transfer function tests
 constexpr int WIDTH = 4;
 
 namespace {
@@ -65,8 +65,6 @@ namespace {
     }
     return S;
   }
-
-  enum class Tristate { Unknown, False, True };
 
   bool isConcrete(KnownBits x) { return (x.Zero | x.One).isAllOnesValue(); }
 
