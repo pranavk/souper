@@ -316,7 +316,7 @@ namespace {
 TEST(InterpreterTests, KBTransferFunctions) {
   ASSERT_TRUE(testFn(Inst::Add));
   ASSERT_TRUE(testFn(Inst::Sub));
-  //ASSERT_TRUE(testFn(Inst::Mul));
+  ASSERT_TRUE(testFn(Inst::Mul));
   ASSERT_TRUE(testFn(Inst::UDiv));
   ASSERT_TRUE(testFn(Inst::URem));
   ASSERT_TRUE(testFn(Inst::And));

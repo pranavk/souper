@@ -27,17 +27,15 @@ namespace souper {
 
       auto trailingZeros0 = lhs.countMinTrailingZeros();
       auto trailingZeros1 = rhs.countMinTrailingZeros();
-      //std::cout <<  lhs.getBitWidth() << " " << trailingZeros0 << " " << trailingZeros1 << std::endl;
       Result.Zero.setLowBits(std::min(trailingZeros0 + trailingZeros1, lhs.getBitWidth()));
 
       // check for leading zeros
-      auto lz0 = lhs.getBitWidth() - lhs.countMinLeadingZeros();
-      auto lz1 = rhs.getBitWidth() - rhs.countMinLeadingZeros();
-      auto min = std::min(lz0, lz1);
-      auto max = std::max(lz0, lz1);
-      auto resultSize = max + (min - 1);
-      if (resultSize < lhs.getBitWidth())
-	Result.Zero.setHighBits(lhs.getBitWidth() - resultSize);
+      auto lz0 = lhs.countMinLeadingZeros();
+      auto lz1 = rhs.countMinLeadingZeros();
+      auto confirmedLeadingZeros = lz0 + lz1 - 1;
+      auto resultSize = lhs.getBitWidth() + rhs.getBitWidth() - 1;
+      if (resultSize - confirmedLeadingZeros < lhs.getBitWidth())
+	Result.Zero.setHighBits(lhs.getBitWidth() - (resultSize - confirmedLeadingZeros));
 
       return Result;
     }
