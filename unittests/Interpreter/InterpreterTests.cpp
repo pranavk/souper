@@ -219,9 +219,9 @@ namespace {
     {
       res = KnownBits(1);
       if (xc.ne(yc))
-	res.Zero.setBit(0);
-      else
 	res.One.setBit(0);
+      else
+	res.Zero.setBit(0);
     }
     break;
     default:
