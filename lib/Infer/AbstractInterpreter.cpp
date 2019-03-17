@@ -451,8 +451,11 @@ namespace souper {
     case Inst::Sle: {
       return BinaryTransferFunctionsKB::sle(KB0, KB1);
     }
-//   case CtPop:
-//     return "ctpop";
+    case Inst::CtPop: {
+      int activeBits = std::ceil(std::log2(KB0.countMaxPopulation()));
+      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
+      return Result;
+    }
     case Inst::BSwap: {
       auto Op0KB = KB0;
       Op0KB.One = Op0KB.One.byteSwap();
@@ -465,10 +468,16 @@ namespace souper {
       Op0KB.Zero = Op0KB.Zero.reverseBits();
       return Op0KB;
     }
-//   case Cttz:
-//     return "cttz";
-//   case Ctlz:
-//     return "ctlz";
+    case Inst::Cttz: {
+      int activeBits = std::ceil(std::log2(KB0.countMaxTrailingZeros()));
+      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
+      return Result;
+    }
+    case Inst::Ctlz: {
+      int activeBits = std::ceil(std::log2(KB0.countMaxLeadingZeros()));
+      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
+      return Result;
+    }
 //   case FShl:
 //     return "fshl";
 //   case FShr:
