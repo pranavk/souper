@@ -1,0 +1,6 @@
+%A:i32 = var
+%B:i32 = var
+%na = xor %A, -1
+%op1 = xor %na, %B
+%r = or %A, %op1
+infer %r
