@@ -17,12 +17,11 @@ namespace souper {
     llvm::KnownBits shl(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits lshr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits ashr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
-    llvm::KnownBits zext(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
-    llvm::KnownBits sext(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
-    llvm::KnownBits trunc(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits eq(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
     llvm::KnownBits ne(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
-    llvm::KnownBits bswap(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
-    llvm::KnownBits bitreverse(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
+    llvm::KnownBits ult(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
+    llvm::KnownBits slt(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
+    llvm::KnownBits ule(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
+    llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
   }
 }

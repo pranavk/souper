@@ -224,9 +224,44 @@ namespace {
 	res.Zero.setBit(0);
     }
     break;
+    case Inst::Ult:
+    {
+      res = KnownBits(1);
+      if (xc.ult(yc))
+	res.One.setBit(0);
+      else
+	res.Zero.setBit(0);
+    }
+    break;
+    case Inst::Slt:
+    {
+      res = KnownBits(1);
+      if (xc.slt(yc))
+	res.One.setBit(0);
+      else
+	res.Zero.setBit(0);
+    }
+    break;
+    case Inst::Ule:
+    {
+      res = KnownBits(1);
+      if (xc.ule(yc))
+	res.One.setBit(0);
+      else
+	res.Zero.setBit(0);
+    }
+    break;
+    case Inst::Sle:
+    {
+      res = KnownBits(1);
+      if (xc.sle(yc))
+	res.One.setBit(0);
+      else
+	res.Zero.setBit(0);
+    }
+    break;
     default:
       break;
-      //llvm::report_fatal_error("no implementation for predicate");
     }
     return res;
   }
@@ -282,6 +317,18 @@ namespace {
 	case Inst::Ne:
 	  Res1 = BinaryTransferFunctionsKB::ne(x, y);
 	  break;
+	case Inst::Ult:
+	  Res1 = BinaryTransferFunctionsKB::ult(x, y);
+	  break;
+	case Inst::Slt:
+	  Res1 = BinaryTransferFunctionsKB::slt(x, y);
+	  break;
+	case Inst::Ule:
+	  Res1 = BinaryTransferFunctionsKB::ule(x, y);
+	  break;
+	case Inst::Sle:
+	  Res1 = BinaryTransferFunctionsKB::sle(x, y);
+	  break;
 	}
 
 	KnownBits Res2 = bruteForce(x, y, pred);
@@ -327,6 +374,10 @@ TEST(InterpreterTests, KBTransferFunctions) {
   ASSERT_TRUE(testFn(Inst::AShr));
   ASSERT_TRUE(testFn(Inst::Eq));
   ASSERT_TRUE(testFn(Inst::Ne));
+  ASSERT_TRUE(testFn(Inst::Ult));
+  ASSERT_TRUE(testFn(Inst::Slt));
+  ASSERT_TRUE(testFn(Inst::Ule));
+  ASSERT_TRUE(testFn(Inst::Sle));
 }
 
 TEST(InterpreterTests, KnownBits) {

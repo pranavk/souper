@@ -3,6 +3,36 @@
 
 #include <iostream>
 
+using namespace llvm;
+
+namespace {
+
+  APInt getUMin(const KnownBits &x) { return x.One; }
+
+  APInt getUMax(const KnownBits &x) { return ~x.Zero; }
+
+  bool isSignKnown(const KnownBits &x) {
+    unsigned W = x.getBitWidth();
+    return x.One[W - 1] || x.Zero[W - 1];
+  }
+
+  APInt getSMin(const KnownBits &x) {
+    if (isSignKnown(x))
+      return x.One;
+    APInt Min = x.One;
+    Min.setBit(x.getBitWidth() - 1);
+    return Min;
+  }
+
+  APInt getSMax(const KnownBits &x) {
+    if (isSignKnown(x))
+      return ~x.Zero;
+    APInt Max = ~x.Zero;
+    Max.clearBit(x.getBitWidth() - 1);
+    return Max;
+  }
+} // anonymous
+
 namespace souper {
 
   namespace BinaryTransferFunctionsKB {
@@ -183,6 +213,38 @@ namespace souper {
 	Result.Zero.setBit(0);
       if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0))
 	Result.One.setBit(0);
+      return Result;
+    }
+    llvm::KnownBits ult(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(1);
+      if (getUMax(lhs).ult(getUMin(rhs)))
+	Result.One.setBit(0);
+      if (getUMin(lhs).uge(getUMax(rhs)))
+	Result.Zero.setBit(0);
+      return Result;
+    }
+    llvm::KnownBits slt(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(1);
+      if (getSMax(lhs).slt(getSMin(rhs)))
+	Result.One.setBit(0);
+      if (getSMin(lhs).sge(getSMax(rhs)))
+	Result.Zero.setBit(0);
+      return Result;
+    }
+    llvm::KnownBits ule(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(1);
+      if (getUMax(lhs).ule(getUMin(rhs)))
+	Result.One.setBit(0);
+      if (getUMin(lhs).ugt(getUMax(rhs)))
+	Result.Zero.setBit(0);
+      return Result;
+    }
+    llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+      llvm::KnownBits Result(1);
+      if (getSMax(lhs).sle(getSMin(rhs)))
+	Result.One.setBit(0);
+      if (getSMin(lhs).sgt(getSMax(rhs)))
+	Result.Zero.setBit(0);
       return Result;
     }
   }
@@ -377,14 +439,18 @@ namespace souper {
     case Inst::Ne: {
       return BinaryTransferFunctionsKB::ne(KB0, KB1);
     }
-//   case Ult:
-//     return "ult";
-//   case Slt:
-//     return "slt";
-//   case Ule:
-//     return "ule";
-//   case Sle:
-//     return "sle";
+    case Inst::Ult: {
+      return BinaryTransferFunctionsKB::ult(KB0, KB1);
+    }
+    case Inst::Slt: {
+      return BinaryTransferFunctionsKB::slt(KB0, KB1);
+    }
+    case Inst::Ule: {
+      return BinaryTransferFunctionsKB::ule(KB0, KB1);
+    }
+    case Inst::Sle: {
+      return BinaryTransferFunctionsKB::sle(KB0, KB1);
+    }
 //   case CtPop:
 //     return "ctpop";
     case Inst::BSwap: {
