@@ -1,6 +1,8 @@
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
 
+#include <iostream>
+
 namespace souper {
 
   namespace BinaryTransferFunctionsKB {

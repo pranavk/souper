@@ -20,6 +20,8 @@
 #include "souper/Inst/Inst.h"
 #include "gtest/gtest.h"
 
+#include <iostream>
+
 using namespace llvm;
 using namespace souper;
 
@@ -47,6 +49,21 @@ namespace {
       assert(false && "error in nextKB");
     }
     return false;
+  }
+
+  std::string knownBitsString(llvm::KnownBits KB) {
+    std::string S = "";
+    for (int I = 0; I < KB.getBitWidth(); I++) {
+      if (KB.Zero.isNegative())
+	S += "0";
+      else if (KB.One.isNegative())
+	S += "1";
+      else
+	S += "?";
+      KB.Zero <<= 1;
+      KB.One <<= 1;
+    }
+    return S;
   }
 
   enum class Tristate { Unknown, False, True };
@@ -127,6 +144,7 @@ namespace {
       llvm::KnownBits y(WIDTH);
       do {
 	KnownBits Res1;
+
 	switch(pred) {
 	case Inst::Add:
 	  Res1 = BinaryTransferFunctionsKB::add(x, y);
@@ -134,8 +152,17 @@ namespace {
 	}
 
 	KnownBits Res2 = bruteForce(x, y, pred);
-	if (Res1.One != Res2.One || Res1.Zero != Res2.Zero)
-	  assert(false && "unsound!!!");
+	assert(Res1.getBitWidth() == Res2.getBitWidth() && "unsound!");
+	assert(!Res1.hasConflict() && !Res2.hasConflict() && "conflict detected!");
+
+	//std::cout << "Res1: " << knownBitsString(Res1) << std::endl;
+	//std::cout << "Res2: " << knownBitsString(Res2) << std::endl;
+	for (unsigned i = 0; i < Res1.getBitWidth(); i++) {
+	  if (Res1.One[i] && Res2.Zero[i]) {
+	    assert(false && "unsound !!!");
+	  }
+	}
+
       } while(nextKB(y));
     } while(nextKB(x));
   }
