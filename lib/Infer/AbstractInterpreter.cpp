@@ -186,6 +186,7 @@ namespace souper {
       return Result;
 
       /*
+      // This was proved unsound by unittests
       auto Op0KB = lhs;
       auto Op1KB = rhs;
       llvm::APInt Cond = (Op0KB.Zero & ~Op1KB.One) | (Op0KB.One & ~Op1KB.Zero);
@@ -281,6 +282,7 @@ namespace souper {
     }
 
     switch(I->K) {
+      // This is useless now
     case Inst::Const:
     case Inst::Var : {
       EvalValue V = VAL(I);
@@ -373,6 +375,16 @@ namespace souper {
 
       return Result;
       */
+
+      // we can't easily put following condition inside
+      // BinaryTransferFunctionsKB but this one gives significant pruning; so,
+      // let's keep it here.
+      // Note that only code inside BinaryTransferFunctionsKB is testable from
+      // unit tests. Put minimum code outside it which you are sure of being correct.
+      if (isReservedConst(I->Ops[1])) {
+	Result.Zero.setLowBits(1);
+	return Result;
+      }
       return BinaryTransferFunctionsKB::shl(KB0, KB1);
     }
     case Inst::LShr : {
@@ -402,6 +414,11 @@ namespace souper {
 
       return Result;
       */
+
+      if (isReservedConst(I->Ops[1])) {
+	Result.Zero.setLowBits(1);
+	return Result;
+      }
       return BinaryTransferFunctionsKB::lshr(KB0, KB1);
     }
 //   case LShrExact:
