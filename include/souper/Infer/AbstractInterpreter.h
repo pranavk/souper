@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOUPER_ABSTRACT_INTERPRTER_H
+#define SOUPER_ABSTRACT_INTERPRTER_H
 
 #include "llvm/Support/KnownBits.h"
 
@@ -25,3 +26,5 @@ namespace souper {
     llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
   }
 }
+
+#endif
