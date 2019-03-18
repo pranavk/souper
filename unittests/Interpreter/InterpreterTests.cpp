@@ -116,6 +116,7 @@ namespace {
     KnownBits res(x.getBitWidth());
     switch (Pred) {
     case Inst::AddNUW:
+    case Inst::AddNSW:
     case Inst::AddNW:
     case Inst::Add:
     {
@@ -125,6 +126,7 @@ namespace {
     }
     break;
     case Inst::SubNUW:
+    case Inst::SubNSW:
     case Inst::SubNW:
     case Inst::Sub:
     {
@@ -277,10 +279,16 @@ namespace {
 	case Inst::Add:
 	  Res1 = BinaryTransferFunctionsKB::add(x, y);
 	  break;
+	case Inst::AddNSW:
+	  Res1 = BinaryTransferFunctionsKB::addnsw(x, y);
+	  break;
 	case Inst::SubNUW:
 	case Inst::SubNW:
 	case Inst::Sub:
 	  Res1 = BinaryTransferFunctionsKB::sub(x, y);
+	  break;
+	case Inst::SubNSW:
+	  Res1 = BinaryTransferFunctionsKB::subnsw(x, y);
 	  break;
 	case Inst::Mul:
 	  Res1 = BinaryTransferFunctionsKB::mul(x, y);
@@ -362,7 +370,9 @@ namespace {
 
 TEST(InterpreterTests, KBTransferFunctions) {
   ASSERT_TRUE(testFn(Inst::Add));
+  ASSERT_TRUE(testFn(Inst::AddNSW));
   ASSERT_TRUE(testFn(Inst::Sub));
+  ASSERT_TRUE(testFn(Inst::SubNSW));
   ASSERT_TRUE(testFn(Inst::Mul));
   ASSERT_TRUE(testFn(Inst::UDiv));
   ASSERT_TRUE(testFn(Inst::URem));
