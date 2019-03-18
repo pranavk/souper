@@ -327,6 +327,8 @@ namespace {
 	case Inst::Sle:
 	  Res1 = BinaryTransferFunctionsKB::sle(x, y);
 	  break;
+	default:
+	  break;
 	}
 
 	KnownBits Res2 = bruteForce(x, y, pred);
