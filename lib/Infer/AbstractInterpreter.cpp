@@ -109,32 +109,28 @@ namespace souper {
     }
 
     llvm::KnownBits and_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      auto Op0KB = lhs;
-      auto Op1KB = rhs;
+      auto result = lhs;
 
-      Op0KB.One &= Op1KB.One;
-      Op0KB.Zero |= Op1KB.Zero;
-      return Op0KB;
+      result.One &= rhs.One;
+      result.Zero |= rhs.Zero;
+      return result;
     }
 
     llvm::KnownBits or_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      auto Op0KB = lhs;
-      auto Op1KB = rhs;
-
-      Op0KB.One |= Op1KB.One;
-      Op0KB.Zero &= Op1KB.Zero;
-      return Op0KB;
+      auto result = lhs;
+      result.One |= rhs.One;
+      result.Zero &= rhs.Zero;
+      return result;
     }
 
     llvm::KnownBits xor_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      auto Op0KB = lhs;
-      auto Op1KB = rhs;
+      auto result = lhs;
       llvm::APInt KnownZeroOut =
-        (Op0KB.Zero & Op1KB.Zero) | (Op0KB.One & Op1KB.One);
-      Op0KB.One = (Op0KB.Zero & Op1KB.One) | (Op0KB.One & Op1KB.Zero);
-      Op0KB.Zero = std::move(KnownZeroOut);
+        (lhs.Zero & rhs.Zero) | (lhs.One & rhs.One);
+      result.One = (lhs.Zero & rhs.One) | (lhs.One & rhs.Zero);
+      result.Zero = std::move(KnownZeroOut);
       // ^ logic copied from LLVM ValueTracking.cpp
-      return Op0KB;
+      return result;
     }
 
     llvm::KnownBits shl(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
