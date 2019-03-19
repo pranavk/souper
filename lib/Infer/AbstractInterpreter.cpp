@@ -1,8 +1,6 @@
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
 
-#include <iostream>
-
 using namespace llvm;
 
 namespace {
@@ -59,6 +57,8 @@ namespace souper {
     llvm::KnownBits mul(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(lhs.getBitWidth());
 
+      // TODO: Below only takes into account leading and trailing zeros. Maybe
+      // also do something with leading ones or trailing ones for improvement?
       auto trailingZeros0 = lhs.countMinTrailingZeros();
       auto trailingZeros1 = rhs.countMinTrailingZeros();
       Result.Zero.setLowBits(std::min(trailingZeros0 + trailingZeros1, lhs.getBitWidth()));
@@ -110,7 +110,6 @@ namespace souper {
 
     llvm::KnownBits and_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       auto result = lhs;
-
       result.One &= rhs.One;
       result.Zero |= rhs.Zero;
       return result;
@@ -335,53 +334,42 @@ namespace souper {
 //     return "phi";
     case Inst::AddNUW :
     case Inst::AddNW :
-    case Inst::Add: {
+    case Inst::Add:
       return BinaryTransferFunctionsKB::add(KB0, KB1);
-    }
-    case Inst::AddNSW: {
+    case Inst::AddNSW:
       return BinaryTransferFunctionsKB::addnsw(KB0, KB1);
-    }
     case Inst::SubNUW :
     case Inst::SubNW :
-    case Inst::Sub: {
+    case Inst::Sub:
       return BinaryTransferFunctionsKB::sub(KB0, KB1);
-    }
-    case Inst::SubNSW: {
+    case Inst::SubNSW:
       return BinaryTransferFunctionsKB::subnsw(KB0, KB1);
-    }
-    case Inst::Mul: {
+    case Inst::Mul:
       return BinaryTransferFunctionsKB::mul(KB0, KB1);
-    }
 //   case MulNSW:
 //     return "mulnsw";
 //   case MulNUW:
 //     return "mulnuw";
 //   case MulNW:
 //     return "mulnw";
-    case Inst::UDiv: {
+    case Inst::UDiv:
       return BinaryTransferFunctionsKB::udiv(KB0, KB1);
-
-    }
 //   case SDiv:
 //     return "sdiv";
 //   case UDivExact:
 //     return "udivexact";
 //   case SDivExact:
 //     return "sdivexact";
-    case Inst::URem: {
+    case Inst::URem:
       return BinaryTransferFunctionsKB::urem(KB0, KB1);
-    }
 //   case SRem:
 //     return "srem";
-    case Inst::And : {
+    case Inst::And :
       return BinaryTransferFunctionsKB::and_(KB0, KB1);
-    }
-    case Inst::Or : {
+    case Inst::Or :
       return BinaryTransferFunctionsKB::or_(KB0, KB1);
-    }
-    case Inst::Xor : {
+    case Inst::Xor :
       return BinaryTransferFunctionsKB::xor_(KB0, KB1);
-    }
     case Inst::ShlNSW :
     case Inst::ShlNUW :
     case Inst::ShlNW : // TODO: Rethink if these make sense
@@ -406,23 +394,18 @@ namespace souper {
     }
 //   case LShrExact:
 //     return "lshrexact";
-    case Inst::AShr: {
+    case Inst::AShr:
       return BinaryTransferFunctionsKB::ashr(KB0, KB1);
-    }
 //   case AShrExact:
 //     return "ashrexact";
 //   case Select:
 //     return "select";
-    case Inst::ZExt: {
+    case Inst::ZExt:
       return KB0.zext(I->Width);
-    }
-    case Inst::SExt: {
+    case Inst::SExt:
       return KB0.sext(I->Width);
-    }
-    case Inst::Trunc: {
+    case Inst::Trunc:
       return KB0.trunc(I->Width);
-    }
-
     case Inst::Eq: {
       // Below implementation, because it contains isReservedConst, is
       // difficult to put inside BinaryTransferFunctionsKB but it's able to
@@ -450,21 +433,16 @@ namespace souper {
       // Fallback to our tested implmentation
       return BinaryTransferFunctionsKB::eq(KB0, KB1);
     }
-    case Inst::Ne: {
+    case Inst::Ne:
       return BinaryTransferFunctionsKB::ne(KB0, KB1);
-    }
-    case Inst::Ult: {
+    case Inst::Ult:
       return BinaryTransferFunctionsKB::ult(KB0, KB1);
-    }
-    case Inst::Slt: {
+    case Inst::Slt:
       return BinaryTransferFunctionsKB::slt(KB0, KB1);
-    }
-    case Inst::Ule: {
+    case Inst::Ule:
       return BinaryTransferFunctionsKB::ule(KB0, KB1);
-    }
-    case Inst::Sle: {
+    case Inst::Sle:
       return BinaryTransferFunctionsKB::sle(KB0, KB1);
-    }
     case Inst::CtPop: {
       int activeBits = std::ceil(std::log2(KB0.countMaxPopulation()));
       Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
@@ -556,20 +534,16 @@ namespace souper {
         return Result; // Whole range
       }
     }
-    case Inst::Trunc: {
+    case Inst::Trunc:
       return CR0.truncate(I->Width);
-    }
-    case Inst::SExt: {
+    case Inst::SExt:
       return CR0.signExtend(I->Width);
-    }
-    case Inst::ZExt: {
+    case Inst::ZExt:
       return CR0.zeroExtend(I->Width);
-    }
     case souper::Inst::AddNUW :
     case souper::Inst::AddNW : // TODO: Rethink if these make sense
-    case Inst::Add: {
+    case Inst::Add:
       return CR0.add(CR1);
-    }
     case Inst::AddNSW: {
       auto V1 = VAL(I->Ops[1]);
       if (V1.hasValue()) {
@@ -581,45 +555,35 @@ namespace souper {
     case souper::Inst::SubNSW :
     case souper::Inst::SubNUW :
     case souper::Inst::SubNW : // TODO: Rethink if these make sense
-    case Inst::Sub: {
+    case Inst::Sub:
       return CR0.sub(CR1);
-    }
     case souper::Inst::MulNSW :
     case souper::Inst::MulNUW :
     case souper::Inst::MulNW : // TODO: Rethink if these make sense
-    case Inst::Mul: {
+    case Inst::Mul:
       return CR0.multiply(CR1);
-    }
-    case Inst::And: {
+    case Inst::And:
       return CR0.binaryAnd(CR1);
-    }
-    case Inst::Or: {
+    case Inst::Or:
       return CR0.binaryOr(CR1);
-    }
     case souper::Inst::ShlNSW :
     case souper::Inst::ShlNUW :
     case souper::Inst::ShlNW : // TODO: Rethink if these make sense
-    case Inst::Shl: {
+    case Inst::Shl:
       return CR0.shl(CR1);
-    }
-    case Inst::AShr: {
+    case Inst::AShr:
       return CR0.ashr(CR1);
-    }
-    case Inst::LShr: {
+    case Inst::LShr:
       return CR0.lshr(CR1);
-    }
-    case Inst::UDiv: {
+    case Inst::UDiv:
       return CR0.udiv(CR1);
-    }
     case Inst::Ctlz:
     case Inst::Cttz:
-    case Inst::CtPop: {
+    case Inst::CtPop:
       return llvm::ConstantRange(llvm::APInt(I->Width, 0),
                                  llvm::APInt(I->Width, I->Ops[0]->Width + 1));
-    }
-    case Inst::Select: {
+    case Inst::Select:
       return CR1.unionWith(CR2);
-    }
       //     case Inst::SDiv: {
       //       auto R0 = FindConstantRange(I->Ops[0], C);
       //       auto R1 = FindConstantRange(I->Ops[1], C);

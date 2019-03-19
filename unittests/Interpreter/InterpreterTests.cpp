@@ -46,7 +46,7 @@ namespace {
 	x.One.clearBit(i);
 	continue;
       }
-      assert(false && "error in nextKB");
+      llvm::report_fatal_error("wow, hosed KB!");
     }
     return false;
   }
@@ -114,154 +114,109 @@ namespace {
     auto yc = y.getConstant();
 
     KnownBits res(x.getBitWidth());
+    bool rcInit = true;
+    APInt rc(x.getBitWidth(), 0);
     switch (Pred) {
     case Inst::AddNUW:
     case Inst::AddNSW:
     case Inst::AddNW:
     case Inst::Add:
-    {
-      auto rc = xc + yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
-    break;
+      rc = xc + yc;
+      break;
     case Inst::SubNUW:
     case Inst::SubNSW:
     case Inst::SubNW:
     case Inst::Sub:
-    {
-      auto rc = xc - yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
-    break;
+      rc = xc - yc;
+      break;
     case Inst::Mul:
-    {
-      auto rc = xc * yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
+      rc = xc * yc;
       break;
     case Inst::UDiv:
-    {
-      if (yc != 0) {
-	auto rc = xc.udiv(yc);
-	res.One = rc;
-	res.Zero = ~rc;
-      }
-    }
-    break;
+      if (yc != 0)
+	rc = xc.udiv(yc);
+      else
+	rcInit = false;
+      break;
     case Inst::URem:
-    {
-      if (yc != 0) {
-	auto rc = xc.urem(yc);
-	res.One = rc;
-	res.Zero = ~rc;
-      }
-    }
-    break;
+      if (yc != 0)
+	rc = xc.urem(yc);
+      else
+	rcInit = false;
+      break;
     case Inst::And:
-    {
-      auto rc = xc & yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
-    break;
+      rc = xc & yc;
+      break;
     case Inst::Or:
-    {
-      auto rc = xc | yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
-    break;
+      rc = xc | yc;
+      break;
     case Inst::Xor:
-    {
-      auto rc = xc ^ yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
-    break;
+      rc = xc ^ yc;
+      break;
     case Inst::Shl:
-    {
-      auto rc = xc << yc;
-      res.One = rc;
-      res.Zero = ~rc;
-    }
-    break;
+      rc = xc << yc;
+      break;
     case Inst::LShr:
-    {
-      if (yc.getLimitedValue() < res.getBitWidth()) {
-	auto rc = xc.lshr(yc.getLimitedValue());
-	res.One = rc;
-	res.Zero = ~rc;
-      }
-    }
-    break;
+      if (yc.getLimitedValue() < res.getBitWidth())
+	rc = xc.lshr(yc.getLimitedValue());
+      else
+	rcInit = false;
+      break;
     case Inst::AShr:
-    {
-      if (yc.getLimitedValue() < res.getBitWidth()) {
-	auto rc = xc.ashr(yc.getLimitedValue());
-	res.One = rc;
-	res.Zero = ~rc;
-      }
-    }
-    break;
+      if (yc.getLimitedValue() < res.getBitWidth())
+	rc = xc.ashr(yc.getLimitedValue());
+      else
+	rcInit = false;
+      break;
     case Inst::Eq:
-    {
       res = KnownBits(1);
       if (xc.eq(yc))
-	res.One.setBit(0);
+	rc = APInt(1, 1);
       else
-      	res.Zero.setBit(0);
-    }
-    break;
+	rcInit = false;
+      break;
     case Inst::Ne:
-    {
       res = KnownBits(1);
       if (xc.ne(yc))
-	res.One.setBit(0);
+	rc = APInt(1, 1);
       else
-	res.Zero.setBit(0);
-    }
-    break;
+	rcInit = false;
+      break;
     case Inst::Ult:
-    {
       res = KnownBits(1);
       if (xc.ult(yc))
-	res.One.setBit(0);
+	rc = APInt(1, 1);
       else
-	res.Zero.setBit(0);
-    }
-    break;
+	rcInit = false;
+      break;
     case Inst::Slt:
-    {
       res = KnownBits(1);
       if (xc.slt(yc))
-	res.One.setBit(0);
+	rc = APInt(1, 1);
       else
-	res.Zero.setBit(0);
-    }
-    break;
+	rcInit = false;
+      break;
     case Inst::Ule:
-    {
       res = KnownBits(1);
       if (xc.ule(yc))
-	res.One.setBit(0);
+	rc = APInt(1, 1);
       else
-	res.Zero.setBit(0);
-    }
-    break;
+	rcInit = false;
+      break;
     case Inst::Sle:
-    {
       res = KnownBits(1);
       if (xc.sle(yc))
-	res.One.setBit(0);
+	rc = APInt(1, 1);
       else
-	res.Zero.setBit(0);
-    }
-    break;
+	rcInit = false;
+      break;
     default:
       break;
+    }
+
+    if (rcInit) {
+      res.One = rc;
+      res.Zero = ~rc;
     }
     return res;
   }
