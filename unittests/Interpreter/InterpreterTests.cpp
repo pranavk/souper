@@ -46,7 +46,9 @@ namespace {
 	x.One.clearBit(i);
 	continue;
       }
-      llvm::report_fatal_error("wow, hosed KB!");
+      // gtest doesn't allow putting fatal failures in non-void returning
+      // functions;
+      llvm_unreachable();
     }
     return false;
   }
@@ -88,8 +90,7 @@ namespace {
 	return x;
       }
     }
-    assert(false);
-    return x;
+    llvm_unreachable();
   }
 
   KnownBits clearLowest(KnownBits x) {
@@ -99,8 +100,7 @@ namespace {
 	return x;
       }
     }
-    assert(false);
-    return x;
+    llvm_unreachable();
   }
 
   KnownBits bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
@@ -211,7 +211,7 @@ namespace {
 	rcInit = false;
       break;
     default:
-      break;
+      llvm_unreachable();
     }
 
     if (rcInit) {
@@ -291,7 +291,7 @@ namespace {
 	  Res1 = BinaryTransferFunctionsKB::sle(x, y);
 	  break;
 	default:
-	  break;
+	  llvm_unreachable();
 	}
 
 	KnownBits Res2 = bruteForce(x, y, pred);
@@ -306,7 +306,7 @@ namespace {
 	}
 
 	for (unsigned i = 0; i < Res1.getBitWidth(); i++) {
-	  if ((Res1.Zero[i] and Res2.One[i]) || (Res1.One[i] and Res2.Zero[i])) {
+	  if ((Res1.Zero[i] && Res2.One[i]) || (Res1.One[i] && Res2.Zero[i])) {
 	    std::cout << "Unsound!! " << Inst::getKindName(pred) << std::endl;
 	    std::cout << knownBitsString(x) << ' ' << Inst::getKindName(pred)
 		      << ' ' << knownBitsString(y) << std::endl;
