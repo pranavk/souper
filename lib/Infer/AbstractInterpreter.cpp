@@ -146,17 +146,20 @@ namespace souper {
       const auto width = Result.getBitWidth();
 
       auto Op0KB = lhs;
+
       if (rhs.isConstant()) {
         auto Val = rhs.getConstant().getLimitedValue();
         if (Val < 0 || Val >= width) {
           return Result;
         }
+
         Op0KB.One <<= Val;
         Op0KB.Zero <<= Val;
         Op0KB.Zero.setLowBits(Val);
         // setLowBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
       } else if (!rhs.isZero()) {
+
 	auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
 	auto minNum = 1 << (confirmedTrailingZeros - 1);
 	// otherwise, it's poison

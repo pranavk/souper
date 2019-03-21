@@ -68,6 +68,10 @@ struct EvalValue {
 };
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
 
+EvalValue evaluateAddNSW(APInt &a, APInt &b);
+EvalValue evaluateAddNUW(APInt &a, APInt &b);
+EvalValue evaluateAddNW(APInt &a, APInt &b);
+
 EvalValue evaluateInst(Inst* Root, ValueCache &Cache);
 llvm::KnownBits findKnownBits(Inst* I, ValueCache& C, bool PartialEval = true);
 llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs);
