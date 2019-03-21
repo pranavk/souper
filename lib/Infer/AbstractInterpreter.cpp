@@ -30,6 +30,14 @@ namespace {
     Max.clearBit(x.getBitWidth() - 1);
     return Max;
   }
+
+  KnownBits getMostPreciseKnownBits(KnownBits a, KnownBits b) {
+    unsigned unknownCountA =
+      a.getBitWidth() - (a.Zero.countPopulation() + a.One.countPopulation());
+    unsigned unknownCountB =
+      b.getBitWidth() - (b.Zero.countPopulation() + b.One.countPopulation());
+    return unknownCountA < unknownCountB ? a : b;
+  }
 } // anonymous
 
 namespace souper {
@@ -379,24 +387,28 @@ namespace souper {
       // BinaryTransferFunctionsKB but this one gives significant pruning; so,
       // let's keep it here.
       // Note that only code inside BinaryTransferFunctionsKB is testable from
-      // unit tests. Put minimum code outside it which you are sure of being correct.
-      if (isReservedConst(I->Ops[1])) {
+      // unit tests. Put minimum code outside it which you are sure of being
+      // correct.
+      if (isReservedConst(I->Ops[1]))
 	Result.Zero.setLowBits(1);
-	return Result;
-      }
-      return BinaryTransferFunctionsKB::shl(KB0, KB1);
+      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
     }
     case Inst::LShr : {
-      if (isReservedConst(I->Ops[1])) {
+      if (isReservedConst(I->Ops[1]))
 	Result.Zero.setHighBits(1);
-	return Result;
-      }
-      return BinaryTransferFunctionsKB::lshr(KB0, KB1);
+      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
     }
 //   case LShrExact:
 //     return "lshrexact";
     case Inst::AShr:
-      return BinaryTransferFunctionsKB::ashr(KB0, KB1);
+      if (isReservedConst(I->Ops[1])) {
+	if (KB0.Zero[KB0.getBitWidth() - 1])
+	  Result.Zero.setHighBits(2);
+	if (KB0.One[KB0.getBitWidth() - 1])
+	  Result.One.setHighBits(2);
+      }
+
+      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
 //   case AShrExact:
 //     return "ashrexact";
 //   case Select:
