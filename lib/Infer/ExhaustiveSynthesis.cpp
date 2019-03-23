@@ -86,6 +86,7 @@ namespace {
 //   or look for feedback from solver, timeouts etc.
 // make sure path conditions work as expected
 // synthesize x.with.overflow
+// synthsize x.saturating
 // remove nop synthesis
 // once an optimization works we can try adding UB qualifiers on the RHS
 //   probably almost as good as synthesizing these directly
@@ -164,16 +165,6 @@ bool CostPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
 
   return true;
 }
-
-struct SynthesisContext {
-  InstContext &IC;
-  SMTLIBSolver *SMTSolver;
-  Inst *LHS;
-  Inst *LHSUB;
-  const std::vector<InstMapping> &PCs;
-  const BlockPCs &BPCs;
-  unsigned Timeout;
-};
 
 void getGuesses(std::vector<Inst *> &Guesses,
                 const std::vector<Inst *> &Inputs,
@@ -706,18 +697,20 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
-void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
+void generateAndSortGuesses(SynthesisContext &SC,
                             std::vector<Inst *> &Guesses) {
-  std::vector<Inst *> Inputs;
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  std::vector<Inst *> Cands;
+  findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
   if (DebugLevel > 1)
-    llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
+    llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
 
-  int LHSCost = souper::cost(LHS, /*IgnoreDepsWithExternalUses=*/true);
+  int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true);
 
   int TooExpensive = 0;
 
-  PruningManager DataflowPruning(LHS, Inputs, DebugLevel, IC, Solver);
+  std::vector<Inst *> Inputs;
+  findVars(SC.LHS, Inputs);
+  PruningManager DataflowPruning(SC, Inputs, DebugLevel);
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
   if (EnableDataflowPruning) {
@@ -730,15 +723,15 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
   // TODO(manasij7479) : If RHS is concrete, evaluate both sides
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
-  getGuesses(Guesses, Inputs, LHS->Width,
-             LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
+  getGuesses(Guesses, Cands, SC.LHS->Width,
+             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
   }
 
   // add nops guesses separately
   for (auto I : Inputs) {
-    if (I->Width == LHS->Width)
+    if (I->Width == SC.LHS->Width)
       addGuess(I, LHSCost, Guesses, TooExpensive);
   }
 
@@ -899,7 +892,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   std::vector<Inst *> Guesses;
   std::error_code EC;
-  generateAndSortGuesses(IC, LHS, SMTSolver, Guesses);
+  generateAndSortGuesses(SC, Guesses);
 
   if (Guesses.empty()) {
     return EC;
