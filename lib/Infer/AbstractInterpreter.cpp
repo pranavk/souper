@@ -107,11 +107,11 @@ namespace souper {
       auto confirmedLeadingZeros = lz0 + lz1 - 1;
       auto resultSize = lhs.getBitWidth() + rhs.getBitWidth() - 1;
       if (resultSize - confirmedLeadingZeros < lhs.getBitWidth())
-	Result.Zero.setHighBits(lhs.getBitWidth() - (resultSize - confirmedLeadingZeros));
+        Result.Zero.setHighBits(lhs.getBitWidth() - (resultSize - confirmedLeadingZeros));
 
       // two numbers odd means reuslt is odd
       if (lhs.One[0] && rhs.One[0])
-	Result.One.setLowBits(1);
+        Result.One.setLowBits(1);
 
       return Result;
     }
@@ -227,11 +227,11 @@ namespace souper {
 
       unsigned minValue = rhs.One.getLimitedValue();
       if (lhs.One.isSignBitSet()) {
-	// confirmed: sign bit = 1
-	Result.One.setHighBits(std::min(lhs.countMinLeadingOnes() + minValue, width));
+        // confirmed: sign bit = 1
+        Result.One.setHighBits(std::min(lhs.countMinLeadingOnes() + minValue, width));
       } else if (lhs.Zero.isSignBitSet()) {
-	// confirmed: sign bit = 0
-	Result.Zero.setHighBits(std::min(lhs.countMinLeadingZeros() + minValue, width));
+        // confirmed: sign bit = 0
+        Result.Zero.setHighBits(std::min(lhs.countMinLeadingZeros() + minValue, width));
       }
       return Result;
     }
@@ -239,12 +239,12 @@ namespace souper {
     llvm::KnownBits eq(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant())) {
-	Result.One.setBit(0);
-	return Result;
+        Result.One.setBit(0);
+        return Result;
       }
       if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0)) {
-	Result.Zero.setBit(0);
-	return Result;
+        Result.Zero.setBit(0);
+        return Result;
       }
       return Result;
     }
@@ -253,58 +253,57 @@ namespace souper {
       llvm::KnownBits Result(1);
 
       if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant()))
-	Result.Zero.setBit(0);
+        Result.Zero.setBit(0);
       if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0))
-	Result.One.setBit(0);
+        Result.One.setBit(0);
       return Result;
     }
 
     llvm::KnownBits ult(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getUMax(lhs).ult(getUMin(rhs)))
-	Result.One.setBit(0);
+        Result.One.setBit(0);
       if (getUMin(lhs).uge(getUMax(rhs)))
-	Result.Zero.setBit(0);
+        Result.Zero.setBit(0);
       return Result;
     }
 
     llvm::KnownBits slt(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getSMax(lhs).slt(getSMin(rhs)))
-	Result.One.setBit(0);
+        Result.One.setBit(0);
       if (getSMin(lhs).sge(getSMax(rhs)))
-	Result.Zero.setBit(0);
+        Result.Zero.setBit(0);
       return Result;
     }
 
     llvm::KnownBits ule(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getUMax(lhs).ule(getUMin(rhs)))
-	Result.One.setBit(0);
+        Result.One.setBit(0);
       if (getUMin(lhs).ugt(getUMax(rhs)))
-	Result.Zero.setBit(0);
+        Result.Zero.setBit(0);
       return Result;
     }
 
     llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       llvm::KnownBits Result(1);
       if (getSMax(lhs).sle(getSMin(rhs)))
-	Result.One.setBit(0);
+        Result.One.setBit(0);
       if (getSMin(lhs).sgt(getSMax(rhs)))
-	Result.Zero.setBit(0);
+        Result.Zero.setBit(0);
       return Result;
     }
   }
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst* instr) {
-			      if (ConsiderConsts && isReservedConst(instr))
-				return true;
-			      if (ConsiderHoles && isReservedInst(instr))
-				return true;
-
-			      return false;
-			    });
+      if (ConsiderConsts && isReservedConst(instr))
+        return true;
+      if (ConsiderHoles && isReservedInst(instr))
+        return true;
+      return false;
+    });
   }
 
   EvalValue getValue(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
@@ -320,7 +319,19 @@ namespace souper {
 
 #define KB0 findKnownBits(I->Ops[0], CI, PartialEval)
 #define KB1 findKnownBits(I->Ops[1], CI, PartialEval)
+#define KB2 findKnownBits(I->Ops[2], CI, PartialEval)
 #define VAL(INST) getValue(INST, CI, PartialEval)
+
+  llvm::KnownBits mergeKnownBits(llvm::KnownBits A, llvm::KnownBits B) {
+    KnownBits Result(A.getBitWidth());
+    for (unsigned i = 0; i < A.getBitWidth(); i++) {
+      if (A.One[i] == B.One[i] && B.One[i])
+        Result.One.setBit(i);
+      if (A.Zero[i] == B.Zero[i] && A.Zero[i])
+        Result.Zero.setBit(i);
+    }
+    return Result;
+  }
 
   llvm::KnownBits findKnownBits(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
@@ -334,13 +345,13 @@ namespace souper {
 
     for (auto Op : I->Ops) {
       if (findKnownBits(Op, CI, PartialEval).hasConflict()) {
-	assert(false && "Conflict KB");
+        assert(false && "Conflict KB");
       }
     }
 
     switch(I->K) {
-//   case Phi:
-//     return "phi";
+    case Inst::Phi:
+      return mergeKnownBits(KB1, KB2);
     case Inst::AddNUW :
     case Inst::AddNW :
     case Inst::Add:
@@ -390,29 +401,29 @@ namespace souper {
       // unit tests. Put minimum code outside it which you are sure of being
       // correct.
       if (isReservedConst(I->Ops[1]))
-	Result.Zero.setLowBits(1);
+        Result.Zero.setLowBits(1);
       return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
     }
     case Inst::LShr : {
       if (isReservedConst(I->Ops[1]))
-	Result.Zero.setHighBits(1);
+        Result.Zero.setHighBits(1);
       return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
     }
 //   case LShrExact:
 //     return "lshrexact";
     case Inst::AShr:
       if (isReservedConst(I->Ops[1])) {
-	if (KB0.Zero[KB0.getBitWidth() - 1])
-	  Result.Zero.setHighBits(2);
-	if (KB0.One[KB0.getBitWidth() - 1])
-	  Result.One.setHighBits(2);
+        if (KB0.Zero[KB0.getBitWidth() - 1])
+          Result.Zero.setHighBits(2);
+        if (KB0.One[KB0.getBitWidth() - 1])
+          Result.One.setHighBits(2);
       }
 
       return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
 //   case AShrExact:
 //     return "ashrexact";
-//   case Select:
-//     return "select";
+    case Inst::Select:
+      return mergeKnownBits(KB1, KB2);
     case Inst::ZExt:
       return KB0.zext(I->Width);
     case Inst::SExt:
@@ -518,6 +529,7 @@ namespace souper {
 
 #undef KB0
 #undef KB1
+#undef KB2
 
   llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
 					  Solver *S,
@@ -603,6 +615,7 @@ namespace souper {
     case Inst::CtPop:
       return llvm::ConstantRange(llvm::APInt(I->Width, 0),
                                  llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+    case Inst::Phi: LLVM_FALLTHROUGH;
     case Inst::Select:
       return CR1.unionWith(CR2);
       //     case Inst::SDiv: {
