@@ -978,6 +978,18 @@ bool souper::hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester) {
   return false;
 }
 
+bool souper::isReservedConst(Inst *I) {
+  return I->K == Inst::ReservedConst ||
+    (I->K == Inst::Var &&
+     (I->Name.find(ReservedConstPrefix) != std::string::npos));
+}
+
+bool souper::isReservedInst(Inst *I) {
+  return I->K == Inst::ReservedInst ||
+    (I->K == Inst::Var &&
+     (I->Name.find(ReservedInstPrefix) != std::string::npos));
+}
+
 Inst *souper::getInstCopy(Inst *I, InstContext &IC,
                           std::map<Inst *, Inst *> &InstCache,
                           std::map<Block *, Block *> &BlockCache,

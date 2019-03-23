@@ -277,6 +277,9 @@ Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst, InstContext &IC);
 void findVars(Inst *Root, std::vector<Inst *> &Vars);
 
 bool hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester);
+bool isReservedConst(Inst *I);
+bool isReservedInst(Inst *I);
+
 void getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
