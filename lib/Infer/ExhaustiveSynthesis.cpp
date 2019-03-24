@@ -83,6 +83,7 @@ namespace {
 //   or look for feedback from solver, timeouts etc.
 // make sure path conditions work as expected
 // synthesize x.with.overflow
+// synthsize x.saturating
 // remove nop synthesis
 // once an optimization works we can try adding UB qualifiers on the RHS
 //   probably almost as good as synthesizing these directly

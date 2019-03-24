@@ -164,9 +164,19 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
       }
     }
 
+    ConcreteInterpreter CI(InputValues);
+    // Concrete Interpreter
+    if (isConcrete(Rep.Mapping.LHS)) {
+      llvm::outs() << " -------- Concrete Interpreter ----------- \n";
+      CI = ConcreteInterpreter(Rep.Mapping.LHS, InputValues);
+      auto Res = CI.evaluateInst(Rep.Mapping.LHS);
+      Res.print(llvm::outs());
+      llvm::outs() << "\n";
+    }
+
     // Known bits interpreter
     llvm::outs() << "\n -------- KnownBits Interpreter ----------- \n";
-    auto KB = findKnownBits(Rep.Mapping.LHS, InputValues);
+    auto KB = findKnownBits(Rep.Mapping.LHS, CI);
     auto KBSolver = findKnownBitsUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "KnownBits result: \n" << knownBitsString(KB) << '\n';
     llvm::outs() << "KnownBits result using solver: \n" << knownBitsString(KBSolver) << "\n\n";
@@ -188,7 +198,7 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     // Constant Ranges interpreter
     llvm::outs() << "\n -------- ConstantRanges Interpreter ----------- \n";
-    auto CR = findConstantRange(Rep.Mapping.LHS, InputValues);
+    auto CR = findConstantRange(Rep.Mapping.LHS, CI);
     auto CRSolver = findConstantRangeUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "ConstantRange result: \n" << CR << '\n';
     llvm::outs() << "ConstantRange result using solver: \n" << CRSolver << "\n\n";
@@ -202,12 +212,6 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     else
       llvm::errs() << "Reults are incomparable.\n";
 
-    if (isConcrete(Rep.Mapping.LHS)) {
-      llvm::outs() << " -------- Concrete Interpreter ----------- \n";
-      auto Res = evaluateInst(Rep.Mapping.LHS, InputValues);
-      Res.print(llvm::outs());
-      llvm::outs() << "\n";
-    }
 
     Index++;
   }

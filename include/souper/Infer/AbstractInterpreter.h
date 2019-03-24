@@ -36,14 +36,14 @@ namespace souper {
 		  bool ConsiderHoles = true);
 
   llvm::KnownBits findKnownBits(Inst* I,
-				ValueCache& C,
+				ConcreteInterpreter& CI,
 				bool PartialEval = true);
   llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
 					   Solver *S,
 					   std::vector<InstMapping> &PCs);
 
   llvm::ConstantRange findConstantRange(souper::Inst* I,
-					souper::ValueCache& C,
+					ConcreteInterpreter& CI,
 					bool PartialEval = true);
   llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I,
 						   Solver *S,
