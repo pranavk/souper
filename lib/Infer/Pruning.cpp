@@ -12,25 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
+
 #include <cstdlib>
 
 namespace souper {
-
-std::string knownBitsString(llvm::KnownBits KB) {
-  std::string S = "";
-  for (int I = 0; I < KB.getBitWidth(); I++) {
-    if (KB.Zero.isNegative())
-      S += "0";
-    else if (KB.One.isNegative())
-      S += "1";
-    else
-      S += "?";
-    KB.Zero <<= 1;
-    KB.One <<= 1;
-  }
-  return S;
-}
 
 std::string getUniqueName() {
   static int counter = 0;
