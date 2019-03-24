@@ -15,10 +15,6 @@
 #include "souper/Infer/Interpreter.h"
 
 namespace souper {
-#define ARG0 Args[0].getValue()
-#define ARG1 Args[1].getValue()
-#define ARG2 Args[2].getValue()
-
   EvalValue evaluateAddNSW(llvm::APInt a, llvm::APInt b) {
     bool Ov;
     auto Res = a.sadd_ov(b, Ov);
@@ -105,7 +101,11 @@ namespace souper {
     return {a.ashr(b)};
   }
 
-  EvalValue evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
+#define ARG0 Args[0].getValue()
+#define ARG1 Args[1].getValue()
+#define ARG2 Args[2].getValue()
+
+  EvalValue ConcreteInterpreter::evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
     // UB propagates unconditionally
     for (auto &A : Args)
       if (A.K == EvalValue::ValueKind::UB)
@@ -375,19 +375,17 @@ namespace souper {
 #undef ARG1
 #undef ARG2
 
-  EvalValue evaluateInst(Inst *Root, ValueCache &Cache) {
-    // TODO populate cache and look things up in it
-    // needed?
-    if (Root->K == Inst::Var) {
-      return Cache[Root];
-    } else {
-      // TODO SmallVector
-      std::vector<EvalValue> EvaluatedArgs;
-      for (auto &&I : Root->Ops)
-        EvaluatedArgs.push_back(evaluateInst(I, Cache));
-      auto Result = evaluateSingleInst(Root, EvaluatedArgs);
-      //Cache[Root] = Result;
-      return Result;
-    }
+  EvalValue ConcreteInterpreter::evaluateInst(Inst *Root) {
+    if (_Cache.find(Root) != _Cache.end())
+      return _Cache[Root];
+
+    // TODO SmallVector
+    std::vector<EvalValue> EvaluatedArgs;
+    for (auto &&I : Root->Ops)
+      EvaluatedArgs.push_back(evaluateInst(I));
+    auto Result = evaluateSingleInst(Root, EvaluatedArgs);
+    if (_CacheWritable)
+      _Cache[Root] = Result;
+    return Result;
   }
 }

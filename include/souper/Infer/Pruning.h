@@ -31,7 +31,7 @@ public:
   // not be called when pruning is disabled
 private:
   Inst *LHS;
-  std::vector<EvalValue> LHSValues;
+  std::vector<ConcreteInterpreter> ConcreteInterpreters;
   InstContext &IC;
   SMTLIBSolver *S;
   PruneFunc DataflowPrune;

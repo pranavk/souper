@@ -28,7 +28,7 @@ std::string getUniqueName() {
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
   for (int I = 0; I < InputVals.size(); ++I) {
-    auto C = LHSValues[I];
+    auto C = ConcreteInterpreters[I].evaluateInst(LHS);
     if (C.hasValue()) {
       auto Val = C.getValue();
       if (StatsLevel > 2) {
@@ -43,7 +43,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       }
 
       if (!isConcrete(RHS)) {
-        auto CR = findConstantRange(RHS, InputVals[I]);
+        auto CR = findConstantRange(RHS, ConcreteInterpreters[I]);
         if (StatsLevel > 2)
           llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
         if (!CR.contains(Val)) {
@@ -58,7 +58,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           }
           return true;
         }
-        auto KB = findKnownBits(RHS, InputVals[I]);
+        auto KB = findKnownBits(RHS, ConcreteInterpreters[I]);
         if (StatsLevel > 2)
           llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
         if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
@@ -74,7 +74,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           return true;
         }
       } else {
-        auto RHSV = evaluateInst(RHS, InputVals[I]);
+        auto RHSV = ConcreteInterpreters[I].evaluateInst(RHS);
         if (RHSV.hasValue()) {
           if (Val != RHSV.getValue()) {
             if (StatsLevel > 2) {
@@ -92,7 +92,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 
 bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
   for (int I = 0; I < InputVals.size(); ++I) {
-    auto C = LHSValues[I];
+    auto C = ConcreteInterpreters[I].evaluateInst(LHS);
     if (C.hasValue()) {
       auto Val = C.getValue();
       if (!isConcrete(RHS, false, true)) {
@@ -176,8 +176,9 @@ void PruningManager::init() {
 
   InputVals = generateInputSets(InputVars);
 
+  // construct a concrete interpreter that caches results for LHS for each input
   for (auto &&Input : InputVals) {
-    LHSValues.push_back(evaluateInst(LHS, Input));
+    ConcreteInterpreters.emplace_back(LHS, Input);
   }
 
   if (StatsLevel > 1) {

@@ -66,6 +66,7 @@ struct EvalValue {
     }
   }
 };
+
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
 
 EvalValue evaluateAddNSW(llvm::APInt a, llvm::APInt b);
@@ -80,7 +81,24 @@ EvalValue evaluateShl(llvm::APInt a, llvm::APInt b);
 EvalValue evaluateLShr(llvm::APInt a, llvm::APInt b);
 EvalValue evaluateAShr(llvm::APInt a, llvm::APInt b);
 
-EvalValue evaluateInst(Inst* Root, ValueCache &Cache);
+  class ConcreteInterpreter {
+    ValueCache _Cache;
+    bool _CacheWritable = false;
+
+    EvalValue evaluateSingleInst(Inst* I, std::vector<EvalValue> &Args);
+
+  public:
+    ConcreteInterpreter() {}
+    ConcreteInterpreter(ValueCache &Input) : _Cache(Input) {}
+    ConcreteInterpreter(Inst* I, ValueCache &Input) : _Cache(Input) {
+      _CacheWritable = true;
+      evaluateInst(I);
+      _CacheWritable = false;
+    }
+
+    EvalValue evaluateInst(Inst* Root);
+  };
+
 }
 
 
