@@ -56,6 +56,21 @@ namespace {
 
 namespace souper {
 
+  std::string knownBitsString(llvm::KnownBits KB) {
+    std::string S = "";
+    for (int I = 0; I < KB.getBitWidth(); I++) {
+      if (KB.Zero.isNegative())
+	S += "0";
+      else if (KB.One.isNegative())
+	S += "1";
+      else
+	S += "?";
+      KB.Zero <<= 1;
+      KB.One <<= 1;
+    }
+    return S;
+  }
+
   namespace BinaryTransferFunctionsKB {
     llvm::KnownBits add(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,

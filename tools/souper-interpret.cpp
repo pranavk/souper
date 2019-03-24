@@ -14,6 +14,8 @@
 
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MemoryBuffer.h"
+
+#include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolverFromArgs.h"
