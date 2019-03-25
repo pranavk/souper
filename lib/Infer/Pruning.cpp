@@ -1,21 +1,23 @@
-#include "souper/Infer/Pruning.h"
-#include <cstdlib>
-namespace souper {
+// Copyright 2019 The Souper Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-std::string knownBitsString(llvm::KnownBits KB) {
-  std::string S = "";
-  for (int I = 0; I < KB.getBitWidth(); I++) {
-    if (KB.Zero.isNegative())
-      S += "0";
-    else if (KB.One.isNegative())
-      S += "1";
-    else
-      S += "?";
-    KB.Zero <<= 1;
-    KB.One <<= 1;
-  }
-  return S;
-}
+#include "souper/Infer/AbstractInterpreter.h"
+#include "souper/Infer/Pruning.h"
+
+#include <cstdlib>
+
+namespace souper {
 
 std::string getUniqueName() {
   static int counter = 0;
@@ -26,7 +28,7 @@ std::string getUniqueName() {
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
   for (int I = 0; I < InputVals.size(); ++I) {
-    auto C = LHSValues[I];
+    auto C = ConcreteInterpreters[I].evaluateInst(LHS);
     if (C.hasValue()) {
       auto Val = C.getValue();
       if (StatsLevel > 2) {
@@ -41,7 +43,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       }
 
       if (!isConcrete(RHS)) {
-        auto CR = findConstantRange(RHS, InputVals[I]);
+        auto CR = findConstantRange(RHS, ConcreteInterpreters[I]);
         if (StatsLevel > 2)
           llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
         if (!CR.contains(Val)) {
@@ -56,7 +58,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           }
           return true;
         }
-        auto KB = findKnownBits(RHS, InputVals[I]);
+        auto KB = findKnownBits(RHS, ConcreteInterpreters[I]);
         if (StatsLevel > 2)
           llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
         if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
@@ -72,7 +74,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           return true;
         }
       } else {
-        auto RHSV = evaluateInst(RHS, InputVals[I]);
+        auto RHSV = ConcreteInterpreters[I].evaluateInst(RHS);
         if (RHSV.hasValue()) {
           if (Val != RHSV.getValue()) {
             if (StatsLevel > 2) {
@@ -90,7 +92,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 
 bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
   for (int I = 0; I < InputVals.size(); ++I) {
-    auto C = LHSValues[I];
+    auto C = ConcreteInterpreters[I].evaluateInst(LHS);
     if (C.hasValue()) {
       auto Val = C.getValue();
       if (!isConcrete(RHS, false, true)) {
@@ -174,8 +176,9 @@ void PruningManager::init() {
 
   InputVals = generateInputSets(InputVars);
 
+  // construct a concrete interpreter that caches results for LHS for each input
   for (auto &&Input : InputVals) {
-    LHSValues.push_back(evaluateInst(LHS, Input));
+    ConcreteInterpreters.emplace_back(LHS, Input);
   }
 
   if (StatsLevel > 1) {

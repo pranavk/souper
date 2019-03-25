@@ -56,6 +56,21 @@ namespace {
 
 namespace souper {
 
+  std::string knownBitsString(llvm::KnownBits KB) {
+    std::string S = "";
+    for (int I = 0; I < KB.getBitWidth(); I++) {
+      if (KB.Zero.isNegative())
+	S += "0";
+      else if (KB.One.isNegative())
+	S += "1";
+      else
+	S += "?";
+      KB.Zero <<= 1;
+      KB.One <<= 1;
+    }
+    return S;
+  }
+
   namespace BinaryTransferFunctionsKB {
     llvm::KnownBits add(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
@@ -281,18 +296,6 @@ namespace souper {
     }
   }
 
-  bool isReservedConst(Inst *I) {
-    return I->K == Inst::ReservedConst ||
-          (I->K == Inst::Var &&
-          (I->Name.find(ReservedConstPrefix) != std::string::npos));
-  }
-
-  bool isReservedInst(Inst *I) {
-    return I->K == Inst::ReservedInst ||
-          (I->K == Inst::Var &&
-          (I->Name.find(ReservedInstPrefix) != std::string::npos));
-  }
-
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst* instr) {
 			      if (ConsiderConsts && isReservedConst(instr))
@@ -304,25 +307,22 @@ namespace souper {
 			    });
   }
 
-  EvalValue getValue(Inst *I, ValueCache &C, bool PartialEval) {
+  EvalValue getValue(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
     if (I->K == Inst::Const)
       return {I->Val};
-    if (C.find(I) != C.end()) {
-      return C[I];
-    } else {
-      if (PartialEval && isConcrete(I)) {
-        return evaluateInst(I, C);
-      }
-    }
+
+    if (PartialEval && isConcrete(I))
+      return CI.evaluateInst(I);
+
     // unimplemented
     return EvalValue();
   }
 
-#define KB0 findKnownBits(I->Ops[0], C, PartialEval)
-#define KB1 findKnownBits(I->Ops[1], C, PartialEval)
-#define VAL(INST) getValue(INST, C, PartialEval)
+#define KB0 findKnownBits(I->Ops[0], CI, PartialEval)
+#define KB1 findKnownBits(I->Ops[1], CI, PartialEval)
+#define VAL(INST) getValue(INST, CI, PartialEval)
 
-  llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
+  llvm::KnownBits findKnownBits(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
 
     EvalValue RootVal = VAL(I);
@@ -333,7 +333,7 @@ namespace souper {
     }
 
     for (auto Op : I->Ops) {
-      if (findKnownBits(Op, C, PartialEval).hasConflict()) {
+      if (findKnownBits(Op, CI, PartialEval).hasConflict()) {
 	assert(false && "Conflict KB");
       }
     }
@@ -519,22 +519,24 @@ namespace souper {
 #undef KB0
 #undef KB1
 
-  llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
+  llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
+					  Solver *S,
+					  std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
     InstContext IC;
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
   }
 
-#define CR0 findConstantRange(I->Ops[0], C, PartialEval)
-#define CR1 findConstantRange(I->Ops[1], C, PartialEval)
-#define CR2 findConstantRange(I->Ops[2], C, PartialEval)
+#define CR0 findConstantRange(I->Ops[0], CI, PartialEval)
+#define CR1 findConstantRange(I->Ops[1], CI, PartialEval)
+#define CR2 findConstantRange(I->Ops[2], CI, PartialEval)
 
   llvm::ConstantRange findConstantRange(Inst *I,
-                                        ValueCache &C, bool PartialEval) {
+					ConcreteInterpreter &CI, bool PartialEval) {
     llvm::ConstantRange Result(I->Width);
 
     if (PartialEval && isConcrete(I)) {
-      auto RootVal = evaluateInst(I, C);
+      auto RootVal = CI.evaluateInst(I);
       if (RootVal.hasValue()) {
         return llvm::ConstantRange(RootVal.getValue());
       }

@@ -1,10 +1,20 @@
+// Copyright 2019 The Souper Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "souper/Infer/Interpreter.h"
 
 namespace souper {
-#define ARG0 Args[0].getValue()
-#define ARG1 Args[1].getValue()
-#define ARG2 Args[2].getValue()
-
   EvalValue evaluateAddNSW(llvm::APInt a, llvm::APInt b) {
     bool Ov;
     auto Res = a.sadd_ov(b, Ov);
@@ -91,7 +101,11 @@ namespace souper {
     return {a.ashr(b)};
   }
 
-  EvalValue evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
+#define ARG0 Args[0].getValue()
+#define ARG1 Args[1].getValue()
+#define ARG2 Args[2].getValue()
+
+  EvalValue ConcreteInterpreter::evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
     // UB propagates unconditionally
     for (auto &A : Args)
       if (A.K == EvalValue::ValueKind::UB)
@@ -361,19 +375,17 @@ namespace souper {
 #undef ARG1
 #undef ARG2
 
-  EvalValue evaluateInst(Inst *Root, ValueCache &Cache) {
-    // TODO populate cache and look things up in it
-    // needed?
-    if (Root->K == Inst::Var) {
-      return Cache[Root];
-    } else {
-      // TODO SmallVector
-      std::vector<EvalValue> EvaluatedArgs;
-      for (auto &&I : Root->Ops)
-        EvaluatedArgs.push_back(evaluateInst(I, Cache));
-      auto Result = evaluateSingleInst(Root, EvaluatedArgs);
-      //Cache[Root] = Result;
-      return Result;
-    }
+  EvalValue ConcreteInterpreter::evaluateInst(Inst *Root) {
+    if (_Cache.find(Root) != _Cache.end())
+      return _Cache[Root];
+
+    // TODO SmallVector
+    std::vector<EvalValue> EvaluatedArgs;
+    for (auto &&I : Root->Ops)
+      EvaluatedArgs.push_back(evaluateInst(I));
+    auto Result = evaluateSingleInst(Root, EvaluatedArgs);
+    if (_CacheWritable)
+      _Cache[Root] = Result;
+    return Result;
   }
 }
