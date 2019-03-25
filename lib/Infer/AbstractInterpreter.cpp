@@ -639,8 +639,31 @@ namespace souper {
     case souper::Inst::ShlNSW :
     case souper::Inst::ShlNUW :
     case souper::Inst::ShlNW : // TODO: Rethink if these make sense
-    case Inst::Shl:
+    case Inst::Shl: {
+      if (CR0.isEmptySet() || CR1.isEmptySet())
+	return ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+
+      APInt max = CR0.getUnsignedMax();
+      APInt Other_umax = CR1.getUnsignedMax();
+      APInt Other_umin = CR1.getUnsignedMin();
+
+      auto width = CR0.getBitWidth();
+      uint64_t high = width - Other_umin.getLimitedValue() - 1;
+      uint64_t low = std::min(static_cast<uint64_t>(0), width - Other_umax.getLimitedValue() - 1);
+      // high and low are pointers on first argument. location of pointer indicates
+      // the first bit
+      APInt maxtmp(width, 0);
+      for (unsigned i = low; i <= high; i++) {
+	APInt tmp = max;
+	tmp <<= (width - i - 1);
+	if (tmp.uge(maxtmp))
+	  maxtmp = tmp;
+      }
+
+      return ConstantRange(APInt(width, 0), std::move(maxtmp) + 1);
+
       return CR0.shl(CR1);
+    }
     case Inst::AShr:
       return CR0.ashr(CR1);
     case Inst::LShr:
