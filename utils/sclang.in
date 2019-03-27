@@ -82,6 +82,11 @@ synthesizer.
 SOUPER_EXHAUSTIVE_SYNTHESIS -- Try to synthesize instructions with
 ExhaustiveSynthesis synthesizer.
 
+SOUPER_DATAFLOW_PRUNING -- Enable dataflow pruning. This only makes sense
+when ExhaustiveSynthesis is enabled.
+
+SOUPER_REDIS_PORT -- Mention the port to use the redis-server on.
+
 SOUPER_NO_EXPLOIT_UB -- Do not exploit LLVM-level undefined behavior
 when making inferences.
 
@@ -241,6 +246,10 @@ if ($souper) {
 
     if (exists $ENV{"SOUPER_DATAFLOW_PRUNING"}) {
       push @ARGV, ("-mllvm", "-souper-dataflow-pruning");
+    }
+
+    if (exists $ENV{"SOUPER_REDIS_PORT"}) {
+      push @ARGV, ("-mllvm", "-souper-redis-port=".$ENV{"SOUPER_REDIS_PORT"});
     }
 
     if (exists $ENV{"SOUPER_STATS"}) {
