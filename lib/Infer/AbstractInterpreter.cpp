@@ -308,9 +308,16 @@ namespace souper {
     });
   }
 
+  // Tries to get the concrete value from @I. If PartialEval is enabled, it tries to
+  // launch concrete interpreter to get the value. If not possible, it returns
+  // EvalValue of ValueKind::Unimplemented
   EvalValue getValue(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
     if (I->K == Inst::Const)
       return {I->Val};
+    else if (I->K == Inst::Var && !isReservedConst(I))
+      // evaluateInst will only give us input value of the variable; it doesn't
+      // evaluate anything.
+      return CI.evaluateInst(I);
 
     if (PartialEval && isConcrete(I))
       return CI.evaluateInst(I);
@@ -358,10 +365,10 @@ namespace souper {
       return KBCache[I];
     }
 
-    EvalValue RootVal = VAL(I);
-    if (RootVal.hasValue()) {
-      Result.One = RootVal.getValue();
-      Result.Zero = ~RootVal.getValue();
+    EvalValue V = VAL(I);
+    if (V.hasValue()) {
+      Result.One = V.getValue();
+      Result.Zero = ~V.getValue();
 
       // cache before returning
       KBCache.emplace(I, Result);
@@ -614,27 +621,18 @@ namespace souper {
     if (CRCache.find(I) != CRCache.end())
       return CRCache.at(I);
 
-    if (PartialEval && isConcrete(I)) {
-      auto RootVal = CI.evaluateInst(I);
-      if (RootVal.hasValue()) {
-	CRCache.emplace(I, llvm::ConstantRange(RootVal.getValue()));
-        return CRCache.at(I);
-      }
+    EvalValue V = VAL(I);
+    if (V.hasValue()) {
+      CRCache.emplace(I, llvm::ConstantRange(V.getValue()));
+      return CRCache.at(I);
     }
 
     switch (I->K) {
     case Inst::Const:
-    case Inst::Var : {
-      EvalValue V = VAL(I);
-      if (V.hasValue()) {
-        Result = llvm::ConstantRange(V.getValue());
-      } else {
-        if (isReservedConst(I)) {
-          Result = llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
-        }
-      }
+    case Inst::Var :
+      if (isReservedConst(I))
+	Result = llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
       break;
-    }
     case Inst::Trunc:
       Result = CR0.truncate(I->Width);
       break;
