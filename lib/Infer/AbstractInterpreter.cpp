@@ -741,8 +741,11 @@ namespace souper {
       break;
     case Inst::Ctlz:
     case Inst::Cttz:
-    case Inst::CtPop:
       Result = llvm::ConstantRange(llvm::APInt(I->Width, 0),
+				   llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? I->Ops[0]->Width : (I->Ops[0]->Width + 1)));
+      break;
+    case Inst::CtPop:
+      Result = llvm::ConstantRange(llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? 1 : 0),
 				   llvm::APInt(I->Width, I->Ops[0]->Width + 1));
       break;
     case Inst::Phi:
