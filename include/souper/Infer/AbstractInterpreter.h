@@ -2,9 +2,12 @@
 #define SOUPER_ABSTRACT_INTERPRTER_H
 
 #include "llvm/Support/KnownBits.h"
+#include "llvm/IR/ConstantRange.h"
 
 #include "souper/Inst/Inst.h"
 #include "souper/Infer/Interpreter.h"
+
+#include <unordered_map>
 
 namespace souper {
   namespace BinaryTransferFunctionsKB {
@@ -29,26 +32,41 @@ namespace souper {
     llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
   }
 
-  std::string knownBitsString(llvm::KnownBits KB);
+
 
   bool isConcrete(souper::Inst *I,
 		  bool ConsiderConsts = true,
 		  bool ConsiderHoles = true);
 
-  llvm::KnownBits findKnownBits(Inst* I,
-				ConcreteInterpreter& CI,
-				bool PartialEval = true);
-  llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
-					   Solver *S,
-					   std::vector<InstMapping> &PCs);
+  class KnownBitsAnalysis {
+    std::unordered_map<Inst*, llvm::KnownBits> KBCache;
 
-  llvm::ConstantRange findConstantRange(souper::Inst* I,
-					ConcreteInterpreter& CI,
-					bool PartialEval = true);
-  llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I,
-						   Solver *S,
-						   std::vector<InstMapping> &PCs);
+  public:
+    llvm::KnownBits findKnownBits(Inst* I,
+				  ConcreteInterpreter& CI,
+				  bool PartialEval = true);
 
+    static llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
+						    Solver *S,
+						    std::vector<InstMapping> &PCs);
+
+    static std::string knownBitsString(llvm::KnownBits KB);
+
+    static llvm::KnownBits getMostPreciseKnownBits(llvm::KnownBits a, llvm::KnownBits b);
+  };
+
+  class ConstantRangeAnalysis {
+    std::unordered_map<Inst*, llvm::ConstantRange> CRCache;
+
+  public:
+    llvm::ConstantRange findConstantRange(souper::Inst* I,
+					  ConcreteInterpreter& CI,
+					  bool PartialEval = true);
+
+    static llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I,
+							    Solver *S,
+							    std::vector<InstMapping> &PCs);
+  };
 }
 
 #endif

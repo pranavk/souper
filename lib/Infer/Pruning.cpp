@@ -40,7 +40,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 
     if (LHSHasPhi) {
       auto LHSCR = LHSConstantRange[I];
-      auto RHSCR = findConstantRange(RHS, ConcreteInterpreters[I]);
+      auto RHSCR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
       if (LHSCR.intersectWith(RHSCR).isEmptySet()) {
         if (StatsLevel > 2) {
           llvm::errs() << "  LHS ConstantRange = " << LHSCR << "\n";
@@ -56,11 +56,11 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       }
 
       auto LHSKB = LHSKnownBits[I];
-      auto RHSKB = findKnownBits(RHS, ConcreteInterpreters[I]);
+      auto RHSKB = KnownBitsAnalysis().findKnownBits(RHS, ConcreteInterpreters[I]);
       if ((LHSKB.Zero & RHSKB.One) != 0 || (LHSKB.One & RHSKB.Zero) != 0) {
         if (StatsLevel > 2) {
-          llvm::errs() << "  LHS KnownBits = " << knownBitsString(LHSKB) << "\n";
-          llvm::errs() << "  RHS KnownBits = " << knownBitsString(RHSKB) << "\n";
+          llvm::errs() << "  LHS KnownBits = " << KnownBitsAnalysis::knownBitsString(LHSKB) << "\n";
+          llvm::errs() << "  RHS KnownBits = " << KnownBitsAnalysis::knownBitsString(RHSKB) << "\n";
           llvm::errs() << "  pruned phi-LHS using KB! ";
             if (!isConcrete(RHS, false, true)) {
               llvm::errs() << "Inst had a hole.";
@@ -78,7 +78,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 	if (StatsLevel > 2)
 	  llvm::errs() << "  LHS value = " << Val << "\n";
         if (!isConcrete(RHS)) {
-          auto CR = findConstantRange(RHS, ConcreteInterpreters[I]);
+          auto CR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
             llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
           if (!CR.contains(Val)) {
@@ -93,9 +93,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
             }
             return true;
           }
-          auto KB = findKnownBits(RHS, ConcreteInterpreters[I]);
+          auto KB = KnownBitsAnalysis().findKnownBits(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
-            llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
+            llvm::errs() << "  RHS KnownBits = " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
           if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
             if (StatsLevel > 2) {
               llvm::errs() << "  pruned using KB! ";
@@ -225,8 +225,8 @@ void PruningManager::init() {
     // Have to abstract interpret LHS because of phi
     LHSHasPhi = true;
     for (unsigned I = 0; I < InputVals.size(); I++) {
-      LHSKnownBits.push_back(findKnownBits(LHS, ConcreteInterpreters[I], true));
-      LHSConstantRange.push_back(findConstantRange(LHS, ConcreteInterpreters[I], true));
+      LHSKnownBits.push_back(KnownBitsAnalysis().findKnownBits(LHS, ConcreteInterpreters[I], true));
+      LHSConstantRange.push_back(ConstantRangeAnalysis().findConstantRange(LHS, ConcreteInterpreters[I], true));
     }
   }
 

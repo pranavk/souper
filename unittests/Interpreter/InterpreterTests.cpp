@@ -372,24 +372,24 @@ TEST(InterpreterTests, KnownBits) {
   Inst *I1 = IC.getConst(llvm::APInt(64, 5));
 
   souper::ConcreteInterpreter CI;
-  auto KB = souper::findKnownBits(I1, CI);
+  auto KB = souper::KnownBitsAnalysis().findKnownBits(I1, CI);
   ASSERT_EQ(KB.One, 5);
   ASSERT_EQ(KB.Zero, ~5);
 
   Inst *I2 = IC.getInst(Inst::Var, 64, {});
   Inst *I3 = IC.getConst(llvm::APInt(64, 0xFF));
   Inst *I4 = IC.getInst(Inst::And, 64, {I2, I3});
-  KB = souper::findKnownBits(I4, CI, /*PartialEval=*/false);
+  KB = souper::KnownBitsAnalysis().findKnownBits(I4, CI, /*PartialEval=*/false);
   ASSERT_EQ(KB.One, 0);
   ASSERT_EQ(KB.Zero, ~0xFF);
 
   Inst *I5 = IC.getInst(Inst::Or, 64, {I2, I1});
-  KB = souper::findKnownBits(I5, CI, /*PartialEval=*/false);
+  KB = souper::KnownBitsAnalysis().findKnownBits(I5, CI, /*PartialEval=*/false);
   ASSERT_EQ(KB.One, 5);
   ASSERT_EQ(KB.Zero, 0);
 
   Inst *I6 = IC.getInst(Inst::Shl, 64, {I2, I1});
-  KB = souper::findKnownBits(I6, CI, /*PartialEval=*/false);
+  KB = souper::KnownBitsAnalysis().findKnownBits(I6, CI, /*PartialEval=*/false);
   ASSERT_EQ(KB.One, 0);
   ASSERT_EQ(KB.Zero, 31);
 }
@@ -400,19 +400,19 @@ TEST(InterpreterTests, ConstantRange) {
   Inst *I1 = IC.getConst(llvm::APInt(64, 5));
 
   souper::ConcreteInterpreter CI;
-  auto CR = souper::findConstantRange(I1, CI, /*PartialEval=*/false);
+  auto CR = souper::ConstantRangeAnalysis().findConstantRange(I1, CI, /*PartialEval=*/false);
   ASSERT_EQ(CR.getLower(), 5);
   ASSERT_EQ(CR.getUpper(), 6);
 
   Inst *I2 = IC.getInst(Inst::Var, 64, {});
   Inst *I3 = IC.getConst(llvm::APInt(64, 0xFF));
   Inst *I4 = IC.getInst(Inst::And, 64, {I2, I3});
-  CR = souper::findConstantRange(I4, CI, /*PartialEval=*/false);
+  CR = souper::ConstantRangeAnalysis().findConstantRange(I4, CI, /*PartialEval=*/false);
   ASSERT_EQ(CR.getLower(), 0);
   ASSERT_EQ(CR.getUpper(), 0xFF + 1);
 
   Inst *I5 = IC.getInst(Inst::Add, 64, {I4, I1});
-  CR = souper::findConstantRange(I5, CI, /*PartialEval=*/false);
+  CR = souper::ConstantRangeAnalysis().findConstantRange(I5, CI, /*PartialEval=*/false);
   ASSERT_EQ(CR.getLower(), 5);
   ASSERT_EQ(CR.getUpper(), 0xFF + 5 + 1);
 }

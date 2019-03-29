@@ -23,6 +23,7 @@ struct EvalValue {
   bool hasValue() {
     return K == ValueKind::Val;
   }
+
   llvm::APInt getValue() {
     if (K != ValueKind::Val) {
       llvm::errs() << "Interpreter: expected number but got ";

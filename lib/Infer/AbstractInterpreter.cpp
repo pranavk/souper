@@ -45,18 +45,20 @@ namespace {
     return Max;
   }
 
-  KnownBits getMostPreciseKnownBits(KnownBits a, KnownBits b) {
+
+} // anonymous
+
+namespace souper {
+
+  KnownBits KnownBitsAnalysis::getMostPreciseKnownBits(KnownBits a, KnownBits b) {
     unsigned unknownCountA =
       a.getBitWidth() - (a.Zero.countPopulation() + a.One.countPopulation());
     unsigned unknownCountB =
       b.getBitWidth() - (b.Zero.countPopulation() + b.One.countPopulation());
     return unknownCountA < unknownCountB ? a : b;
   }
-} // anonymous
 
-namespace souper {
-
-  std::string knownBitsString(llvm::KnownBits KB) {
+  std::string KnownBitsAnalysis::knownBitsString(llvm::KnownBits KB) {
     std::string S = "";
     for (int I = 0; I < KB.getBitWidth(); I++) {
       if (KB.Zero.isNegative())
@@ -349,13 +351,21 @@ namespace souper {
     return Result;
   }
 
-  llvm::KnownBits findKnownBits(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
+  llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
+
+    if (KBCache.find(I) != KBCache.end()) {
+      return KBCache[I];
+    }
 
     EvalValue RootVal = VAL(I);
     if (RootVal.hasValue()) {
       Result.One = RootVal.getValue();
       Result.Zero = ~RootVal.getValue();
+
+      // cache before returning
+      KBCache.emplace(I, Result);
+
       return Result;
     }
 
@@ -371,22 +381,27 @@ namespace souper {
       for (auto &Op : I->Ops) {
 	vec.emplace_back(findKnownBits(Op, CI, PartialEval));
       }
-      return mergeKnownBits(vec);
+      Result = mergeKnownBits(vec);
     }
     case Inst::AddNUW :
     case Inst::AddNW :
     case Inst::Add:
-      return BinaryTransferFunctionsKB::add(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::add(KB0, KB1);
+      break;
     case Inst::AddNSW:
-      return BinaryTransferFunctionsKB::addnsw(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::addnsw(KB0, KB1);
+      break;
     case Inst::SubNUW :
     case Inst::SubNW :
     case Inst::Sub:
-      return BinaryTransferFunctionsKB::sub(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::sub(KB0, KB1);
+      break;
     case Inst::SubNSW:
-      return BinaryTransferFunctionsKB::subnsw(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::subnsw(KB0, KB1);
+      break;
     case Inst::Mul:
-      return BinaryTransferFunctionsKB::mul(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::mul(KB0, KB1);
+      break;
 //   case MulNSW:
 //     return "mulnsw";
 //   case MulNUW:
@@ -394,7 +409,8 @@ namespace souper {
 //   case MulNW:
 //     return "mulnw";
     case Inst::UDiv:
-      return BinaryTransferFunctionsKB::udiv(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::udiv(KB0, KB1);
+      break;
 //   case SDiv:
 //     return "sdiv";
 //   case UDivExact:
@@ -402,15 +418,19 @@ namespace souper {
 //   case SDivExact:
 //     return "sdivexact";
     case Inst::URem:
-      return BinaryTransferFunctionsKB::urem(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::urem(KB0, KB1);
+      break;
 //   case SRem:
 //     return "srem";
     case Inst::And :
-      return BinaryTransferFunctionsKB::and_(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::and_(KB0, KB1);
+      break;
     case Inst::Or :
-      return BinaryTransferFunctionsKB::or_(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::or_(KB0, KB1);
+      break;
     case Inst::Xor :
-      return BinaryTransferFunctionsKB::xor_(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::xor_(KB0, KB1);
+      break;
     case Inst::ShlNSW :
     case Inst::ShlNUW :
     case Inst::ShlNW : // TODO: Rethink if these make sense
@@ -423,12 +443,14 @@ namespace souper {
       // correct.
       if (isReservedConst(I->Ops[1]))
         Result.Zero.setLowBits(1);
-      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
+      break;
     }
     case Inst::LShr : {
       if (isReservedConst(I->Ops[1]))
         Result.Zero.setHighBits(1);
-      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
+      break;
     }
 //   case LShrExact:
 //     return "lshrexact";
@@ -440,17 +462,22 @@ namespace souper {
           Result.One.setHighBits(2);
       }
 
-      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
+      break;
 //   case AShrExact:
 //     return "ashrexact";
     case Inst::Select:
-      return mergeKnownBits({KB1, KB2});
+      Result = mergeKnownBits({KB1, KB2});
+      break;
     case Inst::ZExt:
-      return KB0.zext(I->Width);
+      Result = KB0.zext(I->Width);
+      break;
     case Inst::SExt:
-      return KB0.sext(I->Width);
+      Result = KB0.sext(I->Width);
+      break;
     case Inst::Trunc:
-      return KB0.trunc(I->Width);
+      Result = KB0.trunc(I->Width);
+      break;
     case Inst::Eq: {
       // Below implementation, because it contains isReservedConst, is
       // difficult to put inside BinaryTransferFunctionsKB but it's able to
@@ -463,61 +490,62 @@ namespace souper {
       } else if (isReservedConst(I->Ops[1])) {
         Constant = I->Ops[1];
         Other = KB0;
-      } else {
-        return Result;
       }
 
       // Constants are never equal to 0
-      if (Other.Zero.isAllOnesValue()) {
-        Result.Zero.setBit(0);
-        return Result;
-      } else {
-        return Result;
+      if (Constant != nullptr && Other.Zero.isAllOnesValue()) {
+	Result.Zero.setBit(0);
       }
 
       // Fallback to our tested implmentation
-      return BinaryTransferFunctionsKB::eq(KB0, KB1);
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::eq(KB0, KB1));
+      break;
     }
     case Inst::Ne:
-      return BinaryTransferFunctionsKB::ne(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::ne(KB0, KB1);
+      break;
     case Inst::Ult:
-      return BinaryTransferFunctionsKB::ult(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::ult(KB0, KB1);
+      break;
     case Inst::Slt:
-      return BinaryTransferFunctionsKB::slt(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::slt(KB0, KB1);
+      break;
     case Inst::Ule:
-      return BinaryTransferFunctionsKB::ule(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::ule(KB0, KB1);
+      break;
     case Inst::Sle:
-      return BinaryTransferFunctionsKB::sle(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::sle(KB0, KB1);
+      break;
     case Inst::CtPop: {
       int activeBits = std::ceil(std::log2(KB0.countMaxPopulation()));
       Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
-      return Result;
+      break;
     }
     case Inst::BSwap: {
-      auto Op0KB = KB0;
-      Op0KB.One = Op0KB.One.byteSwap();
-      Op0KB.Zero = Op0KB.Zero.byteSwap();
-      return Op0KB;
+      Result = KB0;
+      Result.One = Result.One.byteSwap();
+      Result.Zero = Result.Zero.byteSwap();
+      break;
     }
     case Inst::BitReverse: {
-      auto Op0KB = KB0;
-      Op0KB.One = Op0KB.One.reverseBits();
-      Op0KB.Zero = Op0KB.Zero.reverseBits();
-      return Op0KB;
+      Result = KB0;
+      Result.One = Result.One.reverseBits();
+      Result.Zero = Result.Zero.reverseBits();
+      break;
     }
     case Inst::Cttz: {
       if (KB0.countMaxTrailingZeros()) {
 	int activeBits = std::ceil(std::log2(KB0.countMaxTrailingZeros()));
 	Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
       }
-      return Result;
+      break;
     }
     case Inst::Ctlz: {
       if (KB0.countMaxLeadingZeros()) {
 	int activeBits = std::ceil(std::log2(KB0.countMaxLeadingZeros()));
 	Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
       }
-      return Result;
+      break;
     }
 //   case FShl:
 //     return "fshl";
@@ -548,17 +576,20 @@ namespace souper {
 //   case SMulO:
 //   case UMulO:
     default :
-      return Result;
+      break;
     }
+
+    KBCache.emplace(I, Result);
+    return KBCache.at(I);
   }
 
 #undef KB0
 #undef KB1
 #undef KB2
 
-  llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
-					  Solver *S,
-					  std::vector<InstMapping> &PCs) {
+  llvm::KnownBits KnownBitsAnalysis::findKnownBitsUsingSolver(Inst *I,
+							      Solver *S,
+							      std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
     InstContext IC;
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
@@ -568,14 +599,19 @@ namespace souper {
 #define CR1 findConstantRange(I->Ops[1], CI, PartialEval)
 #define CR2 findConstantRange(I->Ops[2], CI, PartialEval)
 
-  llvm::ConstantRange findConstantRange(Inst *I,
-					ConcreteInterpreter &CI, bool PartialEval) {
+  llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
+							       ConcreteInterpreter &CI,
+							       bool PartialEval) {
     llvm::ConstantRange Result(I->Width);
+
+    if (CRCache.find(I) != CRCache.end())
+      return CRCache.at(I);
 
     if (PartialEval && isConcrete(I)) {
       auto RootVal = CI.evaluateInst(I);
       if (RootVal.hasValue()) {
-        return llvm::ConstantRange(RootVal.getValue());
+	CRCache.emplace(I, llvm::ConstantRange(RootVal.getValue()));
+        return CRCache.at(I);
       }
     }
 
@@ -584,49 +620,58 @@ namespace souper {
     case Inst::Var : {
       EvalValue V = VAL(I);
       if (V.hasValue()) {
-        return llvm::ConstantRange(V.getValue());
+        Result = llvm::ConstantRange(V.getValue());
       } else {
         if (isReservedConst(I)) {
-          return llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
+          Result = llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
         }
-        return Result; // Whole range
       }
+      break;
     }
     case Inst::Trunc:
-      return CR0.truncate(I->Width);
+      Result = CR0.truncate(I->Width);
+      break;
     case Inst::SExt:
-      return CR0.signExtend(I->Width);
+      Result = CR0.signExtend(I->Width);
+      break;
     case Inst::ZExt:
-      return CR0.zeroExtend(I->Width);
+      Result = CR0.zeroExtend(I->Width);
+      break;
     case souper::Inst::AddNUW :
     case souper::Inst::AddNW : // TODO: Rethink if these make sense
     case Inst::Add:
-      return CR0.add(CR1);
+      Result = CR0.add(CR1);
+      break;
     case Inst::AddNSW: {
       auto V1 = VAL(I->Ops[1]);
       if (V1.hasValue()) {
-        return CR0.addWithNoSignedWrap(V1.getValue());
-      } else {
-        return Result; // full range, can we do better?
+        Result = CR0.addWithNoSignedWrap(V1.getValue());
       }
+      break;
     }
     case souper::Inst::SubNSW :
     case souper::Inst::SubNUW :
     case souper::Inst::SubNW : // TODO: Rethink if these make sense
     case Inst::Sub:
-      return CR0.sub(CR1);
+      Result = CR0.sub(CR1);
+      break;
     case souper::Inst::MulNSW :
     case souper::Inst::MulNUW :
     case souper::Inst::MulNW : // TODO: Rethink if these make sense
     case Inst::Mul:
-      return CR0.multiply(CR1);
+      Result = CR0.multiply(CR1);
+      break;
     case Inst::And: {
-      if (CR0.isEmptySet() || CR1.isEmptySet())
-	return llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+      if (CR0.isEmptySet() || CR1.isEmptySet()) {
+	Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+	break;
+      }
 
       APInt umin = APIntOps::umin(CR1.getUnsignedMax(), CR0.getUnsignedMax());
-      if (umin.isAllOnesValue())
-	return llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
+      if (umin.isAllOnesValue()) {
+	Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
+	break;
+      }
 
       APInt res = APInt::getNullValue(CR0.getBitWidth());
 
@@ -652,11 +697,14 @@ namespace souper {
 	}
       }
 
-      return llvm::ConstantRange(std::move(res), std::move(umin) + 1);
+      Result = llvm::ConstantRange(std::move(res), std::move(umin) + 1);
+      break;
     }
     case Inst::Or: {
-      if (CR0.isEmptySet() || CR1.isEmptySet())
-        return llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+      if (CR0.isEmptySet() || CR1.isEmptySet()) {
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+	break;
+      }
 
       APInt umax = APIntOps::umax(CR0.getUnsignedMin(), CR1.getUnsignedMin());
       APInt res = APInt::getNullValue(CR0.getBitWidth());
@@ -671,30 +719,38 @@ namespace souper {
       }
 
       if (umax == res)
-        return llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
-
-      return llvm::ConstantRange(std::move(umax), std::move(res));
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
+      else
+	Result = llvm::ConstantRange(std::move(umax), std::move(res));
+      break;
     }
     case souper::Inst::ShlNSW :
     case souper::Inst::ShlNUW :
     case souper::Inst::ShlNW : // TODO: Rethink if these make sense
     case Inst::Shl:
-      return CR0.shl(CR1);
+      Result = CR0.shl(CR1);
+      break;
     case Inst::AShr:
-      return CR0.ashr(CR1);
+      Result = CR0.ashr(CR1);
+      break;
     case Inst::LShr:
-      return CR0.lshr(CR1);
+      Result = CR0.lshr(CR1);
+      break;
     case Inst::UDiv:
-      return CR0.udiv(CR1);
+      Result = CR0.udiv(CR1);
+      break;
     case Inst::Ctlz:
     case Inst::Cttz:
     case Inst::CtPop:
-      return llvm::ConstantRange(llvm::APInt(I->Width, 0),
-                                 llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+      Result = llvm::ConstantRange(llvm::APInt(I->Width, 0),
+				   llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+      break;
     case Inst::Phi:
-      return CR0.unionWith(CR1);
+      Result = CR0.unionWith(CR1);
+      break;
     case Inst::Select:
-      return CR1.unionWith(CR2);
+      Result = CR1.unionWith(CR2);
+      break;
       //     case Inst::SDiv: {
       //       auto R0 = FindConstantRange(I->Ops[0], C);
       //       auto R1 = FindConstantRange(I->Ops[1], C);
@@ -702,15 +758,18 @@ namespace souper {
       //     }
       // TODO: Xor pattern for not, truncs and extends, etc
     default:
-      return Result;
+      break;
     }
+
+    CRCache.emplace(I, Result);
+    return CRCache.at(I);
   }
 #undef CR0
 #undef CR1
 #undef CR2
 #undef VAL
 
-  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
+  llvm::ConstantRange ConstantRangeAnalysis::findConstantRangeUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
     // FIXME implement this
     llvm::ConstantRange Result(I->Width);
     return Result;

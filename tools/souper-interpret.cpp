@@ -176,10 +176,10 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     // Known bits interpreter
     llvm::outs() << "\n -------- KnownBits Interpreter ----------- \n";
-    auto KB = findKnownBits(Rep.Mapping.LHS, CI);
-    auto KBSolver = findKnownBitsUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
-    llvm::outs() << "KnownBits result: \n" << knownBitsString(KB) << '\n';
-    llvm::outs() << "KnownBits result using solver: \n" << knownBitsString(KBSolver) << "\n\n";
+    auto KB = KnownBitsAnalysis().findKnownBits(Rep.Mapping.LHS, CI);
+    auto KBSolver = KnownBitsAnalysis::findKnownBitsUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
+    llvm::outs() << "KnownBits result: \n" << KnownBitsAnalysis::knownBitsString(KB) << '\n';
+    llvm::outs() << "KnownBits result using solver: \n" << KnownBitsAnalysis::knownBitsString(KBSolver) << "\n\n";
 
     switch(compareKnownBits(KB, KBSolver)) {
     case CompareDataflowResult::SAME:
@@ -198,8 +198,8 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     // Constant Ranges interpreter
     llvm::outs() << "\n -------- ConstantRanges Interpreter ----------- \n";
-    auto CR = findConstantRange(Rep.Mapping.LHS, CI);
-    auto CRSolver = findConstantRangeUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
+    auto CR = ConstantRangeAnalysis().findConstantRange(Rep.Mapping.LHS, CI);
+    auto CRSolver = ConstantRangeAnalysis::findConstantRangeUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "ConstantRange result: \n" << CR << '\n';
     llvm::outs() << "ConstantRange result using solver: \n" << CRSolver << "\n\n";
 
