@@ -116,8 +116,6 @@ namespace souper {
       for (auto &A : Args)
         if (A.K == EvalValue::ValueKind::Poison)
           return EvalValue::poison();
-    } else if (Args[0].K == EvalValue::ValueKind::Poison) {
-      return EvalValue::poison();
     }
 
     for (auto &A : Args)
@@ -142,7 +140,7 @@ namespace souper {
       // operands. If we ever want to deterministically interpret an LHS
       // containing a phi, this needs to start returning a list, or there needs
       // to be enough information in BlockPCs to interpret ARG0
-      return Args[1];
+      return Args[0];
 
     case Inst::Add:
       return {ARG0 + ARG1};
@@ -295,7 +293,7 @@ namespace souper {
 
     case Inst::Select:
       if (!Args[0].hasValue())
-        return EvalValue::ub();
+        return Args[0];
       return ARG0.getBoolValue() ? Args[1] : Args[2];
 
     case Inst::ZExt:
