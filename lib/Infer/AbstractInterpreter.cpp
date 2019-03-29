@@ -469,9 +469,16 @@ namespace souper {
     case Inst::Select:
       Result = mergeKnownBits({KB1, KB2});
       break;
-    case Inst::ZExt:
-      Result = KB0.zext(I->Width);
+    case Inst::ZExt: {
+      // below code copied from LLVM master. Directly use KnownBits::zext() when
+      // we move to LLVM9
+      unsigned OldBitWidth = KB0.getBitWidth();
+      APInt NewZero = KB0.Zero.zext(I->Width);
+      NewZero.setBitsFrom(OldBitWidth);
+      Result.Zero = NewZero;
+      Result.One = KB0.One.zext(I->Width);
       break;
+    }
     case Inst::SExt:
       Result = KB0.sext(I->Width);
       break;
