@@ -762,7 +762,14 @@ namespace souper {
       Result = CR0.unionWith(CR1);
       break;
     case Inst::Select:
-      Result = CR1.unionWith(CR2);
+      if (CR0.getSetSize() == 1) {
+	if (CR0.contains(APInt(1, 1)))
+	  Result = CR1;
+	else if (CR0.contains(APInt(1, 0)))
+	  Result = CR2;
+      } else {
+	Result = CR1.unionWith(CR2);
+      }
       break;
       //     case Inst::SDiv: {
       //       auto R0 = FindConstantRange(I->Ops[0], C);
