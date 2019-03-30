@@ -20,6 +20,9 @@
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Value.h"
+
+#include "souper/SMTLIB2/Solver.h"
+
 #include <map>
 #include <memory>
 #include <set>
@@ -236,6 +239,16 @@ public:
                 bool Available=true);
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
                 llvm::APInt DemandedBits, bool Available);
+};
+
+struct SynthesisContext {
+  InstContext &IC;
+  SMTLIBSolver *SMTSolver;
+  Inst *LHS;
+  Inst *LHSUB;
+  const std::vector<InstMapping> &PCs;
+  const BlockPCs &BPCs;
+  unsigned Timeout;
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
