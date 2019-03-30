@@ -32,30 +32,30 @@ void InstGraph::writeNodeProperties(Inst* I) {
 
   if (I == Root) {
     O << getNodeName(I) << " [style=bold];\n";
-    return;
   }
 
+  // labeling
   switch(I->K) {
   case Inst::Kind::ReservedConst:
+    O << getNodeName(I) << " [label=ReservedConst];\n";
+    break;
   case Inst::Kind::ReservedInst:
+    O << getNodeName(I) << " [label=ReservedInst];\n";
+    break;
   case Inst::Kind::Var:
-    O << getNodeName(I) << " [shape=box];\n";
+    O << getNodeName(I) << " [shape=box,label=\"Var " + I->Name + "\"];\n";
+    break;
+  case Inst::Kind::Const:
+    O << getNodeName(I) << " [label=\"" + I->Val.toString(10, false) + "\"];\n";
+    break;
+  default:
+    O << getNodeName(I) << " [label=" + std::string(Inst::getKindName(I->K)) + "];\n";
     break;
   }
 }
 
 std::string InstGraph::getNodeName(Inst* I) {
-  switch(I->K) {
-  case Inst::Kind::Const:
-    return "\"Const " + I->Val.toString(10, true) + "\"";
-  case Inst::Kind::Var:
-    return "\"Var " + I->Name + "\"";
-  case Inst::Kind::ReservedConst:
-  case Inst::Kind::ReservedInst:
-    return "\"Reserved " + I->Name + "\"";
-  default:
-    return "\"" + std::string(Inst::getKindName(I->K)) + "\"";
-  }
+  return "\"" + std::to_string(reinterpret_cast<intptr_t>(I)) + "\"";
 }
 
 void InstGraph::writeRecursive(Inst* I) {
