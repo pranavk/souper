@@ -545,9 +545,8 @@ namespace souper {
       Result = BinaryTransferFunctionsKB::sle(KB0, KB1);
       break;
     case Inst::CtPop: {
-      auto k = KB0.countMaxPopulation();
-      int activeBits = std::ceil(std::log2(k));
-      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
+      APInt val(KB0.getBitWidth(), KB0.countMaxPopulation());
+      Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
       break;
     }
     case Inst::BSwap: {
@@ -563,17 +562,13 @@ namespace souper {
       break;
     }
     case Inst::Cttz: {
-      if (KB0.countMaxTrailingZeros()) {
-        int activeBits = std::ceil(std::log2(KB0.countMaxTrailingZeros()));
-        Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
-      }
+      APInt val(KB0.getBitWidth(), KB0.countMaxTrailingZeros());
+      Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
       break;
     }
     case Inst::Ctlz: {
-      if (KB0.countMaxLeadingZeros()) {
-        int activeBits = std::ceil(std::log2(KB0.countMaxLeadingZeros()));
-        Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
-      }
+      APInt val(KB0.getBitWidth(), KB0.countMaxLeadingZeros());
+      Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
       break;
     }
 //   case FShl:
@@ -608,8 +603,8 @@ namespace souper {
       break;
     }
 
-
     assert(!Result.hasConflict() && "Conflict in resulting KB!");
+
     KBCache.emplace(I, Result);
     return KBCache.at(I);
   }
