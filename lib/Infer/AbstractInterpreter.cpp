@@ -474,7 +474,12 @@ namespace souper {
 //   case AShrExact:
 //     return "ashrexact";
     case Inst::Select:
-      Result = mergeKnownBits({KB1, KB2});
+      if (KB0.One.getBoolValue())
+	Result = KB1;
+      else if (KB0.Zero.getBoolValue())
+	Result = KB2;
+      else
+	Result = mergeKnownBits({KB1, KB2});
       break;
     case Inst::ZExt: {
       // below code copied from LLVM master. Directly use KnownBits::zext() when
