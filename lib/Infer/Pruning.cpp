@@ -322,25 +322,39 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   if (isInputValid(Cache))
     InputSets.push_back(Cache);
 
+  constexpr int MaxTries = 100;
   constexpr int NumLargeInputs = 5;
   std::srand(0);
-  for (int i = 0 ; i < NumLargeInputs; ++i ) {
+  int i, m;
+  for (i = 0, m = 0; i < NumLargeInputs && m < MaxTries; ++m ) {
     for (auto &&I : Inputs) {
       if (I->K == souper::Inst::Var)
         Cache[I] = {llvm::APInt(I->Width, std::rand() % llvm::APInt(I->Width, -1).getLimitedValue())};
     }
-    if (isInputValid(Cache))
+    if (isInputValid(Cache)) {
+      i++;
       InputSets.push_back(Cache);
+    }
+  }
+
+  if (StatsLevel > 2 && i < NumLargeInputs) {
+    llvm::errs() << "MaxTries (100) exhausted searching for large inputs.\n";
   }
 
   constexpr int NumSmallInputs = 5;
-  for (int i = 0 ; i < NumSmallInputs; ++i ) {
+  for (i = 0, m = 0; i < NumSmallInputs && m < MaxTries; ++m ) {
     for (auto &&I : Inputs) {
       if (I->K == souper::Inst::Var)
         Cache[I] = {llvm::APInt(I->Width, std::rand() % I->Width)};
     }
-    if (isInputValid(Cache))
+    if (isInputValid(Cache)) {
+      i++;
       InputSets.push_back(Cache);
+    }
+  }
+
+  if (StatsLevel > 2 && i < NumSmallInputs) {
+    llvm::errs() << "MaxTries (100) exhausted searching for small inputs.\n";
   }
 
   return InputSets;
