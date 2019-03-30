@@ -358,12 +358,27 @@ namespace souper {
     return Result;
   }
 
+  bool KnownBitsAnalysis::cacheHasValue(Inst* I) {
+    if (KBCache.find(I) != KBCache.end())
+      return true;
+
+    if (I->K == Inst::Var && (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())) {
+      llvm::KnownBits metadataKB;
+      metadataKB.Zero = I->KnownZeros;
+      metadataKB.One = I->KnownOnes;
+
+      KBCache.emplace(I, std::move(metadataKB));
+      return true;
+    }
+
+    return false;
+  }
+
   llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
 
-    if (KBCache.find(I) != KBCache.end()) {
-      return KBCache[I];
-    }
+    if (cacheHasValue(I))
+      return KBCache.at(I);
 
     EvalValue V = VAL(I);
     if (V.hasValue()) {
@@ -618,12 +633,24 @@ namespace souper {
 #define CR1 findConstantRange(I->Ops[1], CI, PartialEval)
 #define CR2 findConstantRange(I->Ops[2], CI, PartialEval)
 
+  bool ConstantRangeAnalysis::cacheHasValue(Inst* I) {
+    if (CRCache.find(I) != CRCache.end())
+      return true;
+
+    if (I->K == Inst::Var && !I->Range.isFullSet()) {
+      CRCache.emplace(I, I->Range);
+      return true;
+    }
+
+    return false;
+  }
+
   llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
 							       ConcreteInterpreter &CI,
 							       bool PartialEval) {
     llvm::ConstantRange Result(I->Width);
 
-    if (CRCache.find(I) != CRCache.end())
+    if (cacheHasValue(I))
       return CRCache.at(I);
 
     EvalValue V = VAL(I);

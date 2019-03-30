@@ -32,14 +32,15 @@ namespace souper {
     llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs);
   }
 
-
-
   bool isConcrete(souper::Inst *I,
 		  bool ConsiderConsts = true,
 		  bool ConsiderHoles = true);
 
   class KnownBitsAnalysis {
     std::unordered_map<Inst*, llvm::KnownBits> KBCache;
+
+    // Checks the cache or instruction metadata for knonwbits information
+    bool cacheHasValue(Inst* I);
 
   public:
     llvm::KnownBits findKnownBits(Inst* I,
@@ -57,6 +58,9 @@ namespace souper {
 
   class ConstantRangeAnalysis {
     std::unordered_map<Inst*, llvm::ConstantRange> CRCache;
+
+    // checks the cache or instruction metadata for cr information
+    bool cacheHasValue(Inst* I);
 
   public:
     llvm::ConstantRange findConstantRange(souper::Inst* I,
