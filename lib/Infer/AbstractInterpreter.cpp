@@ -391,12 +391,6 @@ namespace souper {
       return Result;
     }
 
-    for (auto Op : I->Ops) {
-      if (findKnownBits(Op, CI, PartialEval).hasConflict()) {
-        assert(false && "Conflict KB");
-      }
-    }
-
     switch(I->K) {
     case Inst::Phi: {
       std::vector<llvm::KnownBits> vec;
@@ -614,6 +608,8 @@ namespace souper {
       break;
     }
 
+
+    assert(!Result.hasConflict() && "Conflict in resulting KB!");
     KBCache.emplace(I, Result);
     return KBCache.at(I);
   }
