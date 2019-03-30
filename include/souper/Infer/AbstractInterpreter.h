@@ -33,8 +33,8 @@ namespace souper {
   }
 
   bool isConcrete(souper::Inst *I,
-		  bool ConsiderConsts = true,
-		  bool ConsiderHoles = true);
+                  bool ConsiderConsts = true,
+                  bool ConsiderHoles = true);
 
   class KnownBitsAnalysis {
     std::unordered_map<Inst*, llvm::KnownBits> KBCache;
@@ -44,12 +44,12 @@ namespace souper {
 
   public:
     llvm::KnownBits findKnownBits(Inst* I,
-				  ConcreteInterpreter& CI,
-				  bool PartialEval = true);
+                                  ConcreteInterpreter& CI,
+                                  bool PartialEval = true);
 
     static llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
-						    Solver *S,
-						    std::vector<InstMapping> &PCs);
+                                                    Solver *S,
+                                                    std::vector<InstMapping> &PCs);
 
     static std::string knownBitsString(llvm::KnownBits KB);
 
@@ -64,12 +64,12 @@ namespace souper {
 
   public:
     llvm::ConstantRange findConstantRange(souper::Inst* I,
-					  ConcreteInterpreter& CI,
-					  bool PartialEval = true);
+                                          ConcreteInterpreter& CI,
+                                          bool PartialEval = true);
 
     static llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I,
-							    Solver *S,
-							    std::vector<InstMapping> &PCs);
+                                                            Solver *S,
+                                                            std::vector<InstMapping> &PCs);
   };
 }
 

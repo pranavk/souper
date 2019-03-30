@@ -75,8 +75,8 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       auto C = ConcreteInterpreters[I].evaluateInst(SC.LHS);
       if (C.hasValue()) {
         auto Val = C.getValue();
-	if (StatsLevel > 2)
-	  llvm::errs() << "  LHS value = " << Val << "\n";
+        if (StatsLevel > 2)
+          llvm::errs() << "  LHS value = " << Val << "\n";
         if (!isConcrete(RHS)) {
           auto CR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
@@ -278,11 +278,11 @@ bool PruningManager::isInputValid(ValueCache &Cache) {
     llvm::errs() << "Input failed PC check: ";
     for (auto &&p : Cache) {
       if (p.first->K != Inst::Var)
-	continue;
+        continue;
 
       if (p.second.hasValue()) {
-	llvm::errs() << "  Var " << p.first->Name << " : "
-		     << p.second.getValue() << ", ";
+        llvm::errs() << "  Var " << p.first->Name << " : "
+                     << p.second.getValue() << ", ";
       }
     }
     llvm::errs() << '\n';

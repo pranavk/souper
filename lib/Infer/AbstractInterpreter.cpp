@@ -62,11 +62,11 @@ namespace souper {
     std::string S = "";
     for (int I = 0; I < KB.getBitWidth(); I++) {
       if (KB.Zero.isNegative())
-	S += "0";
+        S += "0";
       else if (KB.One.isNegative())
-	S += "1";
+        S += "1";
       else
-	S += "?";
+        S += "?";
       KB.Zero <<= 1;
       KB.One <<= 1;
     }
@@ -337,7 +337,7 @@ namespace souper {
     auto width = vec[0].getBitWidth();
     for (unsigned i = 1; i < vec.size(); i++) {
       if (width != vec[i].getBitWidth())
-	llvm::report_fatal_error("mergeKnownBits: bitwidth should be same of all inputs");
+        llvm::report_fatal_error("mergeKnownBits: bitwidth should be same of all inputs");
     }
 
     KnownBits Result(width);
@@ -345,10 +345,10 @@ namespace souper {
       bool one = vec[0].One[i];
       bool zero = vec[0].Zero[i];
       for (unsigned j = 1; j < vec.size(); j++) {
-	if (!one || !vec[j].One[i])
-	  one = false;
-	if (!zero || !vec[j].Zero[i])
-	  zero = false;
+        if (!one || !vec[j].One[i])
+          one = false;
+        if (!zero || !vec[j].Zero[i])
+          zero = false;
       }
       if (one)
         Result.One.setBit(i);
@@ -401,7 +401,7 @@ namespace souper {
     case Inst::Phi: {
       std::vector<llvm::KnownBits> vec;
       for (auto &Op : I->Ops) {
-	vec.emplace_back(findKnownBits(Op, CI, PartialEval));
+        vec.emplace_back(findKnownBits(Op, CI, PartialEval));
       }
       Result = mergeKnownBits(vec);
     }
@@ -490,11 +490,11 @@ namespace souper {
 //     return "ashrexact";
     case Inst::Select:
       if (KB0.One.getBoolValue())
-	Result = KB1;
+        Result = KB1;
       else if (KB0.Zero.getBoolValue())
-	Result = KB2;
+        Result = KB2;
       else
-	Result = mergeKnownBits({KB1, KB2});
+        Result = mergeKnownBits({KB1, KB2});
       break;
     case Inst::ZExt: {
       // below code copied from LLVM master. Directly use KnownBits::zext() when
@@ -528,7 +528,7 @@ namespace souper {
 
       // Constants are never equal to 0
       if (Constant != nullptr && Other.Zero.isAllOnesValue()) {
-	Result.Zero.setBit(0);
+        Result.Zero.setBit(0);
       }
 
       // Fallback to our tested implmentation
@@ -551,7 +551,8 @@ namespace souper {
       Result = BinaryTransferFunctionsKB::sle(KB0, KB1);
       break;
     case Inst::CtPop: {
-      int activeBits = std::ceil(std::log2(KB0.countMaxPopulation()));
+      auto k = KB0.countMaxPopulation();
+      int activeBits = std::ceil(std::log2(k));
       Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
       break;
     }
@@ -569,15 +570,15 @@ namespace souper {
     }
     case Inst::Cttz: {
       if (KB0.countMaxTrailingZeros()) {
-	int activeBits = std::ceil(std::log2(KB0.countMaxTrailingZeros()));
-	Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
+        int activeBits = std::ceil(std::log2(KB0.countMaxTrailingZeros()));
+        Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
       }
       break;
     }
     case Inst::Ctlz: {
       if (KB0.countMaxLeadingZeros()) {
-	int activeBits = std::ceil(std::log2(KB0.countMaxLeadingZeros()));
-	Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
+        int activeBits = std::ceil(std::log2(KB0.countMaxLeadingZeros()));
+        Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
       }
       break;
     }
@@ -622,8 +623,8 @@ namespace souper {
 #undef KB2
 
   llvm::KnownBits KnownBitsAnalysis::findKnownBitsUsingSolver(Inst *I,
-							      Solver *S,
-							      std::vector<InstMapping> &PCs) {
+                                                              Solver *S,
+                                                              std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
     InstContext IC;
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
@@ -646,8 +647,8 @@ namespace souper {
   }
 
   llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
-							       ConcreteInterpreter &CI,
-							       bool PartialEval) {
+                                                               ConcreteInterpreter &CI,
+                                                               bool PartialEval) {
     llvm::ConstantRange Result(I->Width);
 
     if (cacheHasValue(I))
@@ -663,7 +664,7 @@ namespace souper {
     case Inst::Const:
     case Inst::Var :
       if (isReservedConst(I))
-	Result = llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
+        Result = llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
       break;
     case Inst::Trunc:
       Result = CR0.truncate(I->Width);
@@ -700,14 +701,14 @@ namespace souper {
       break;
     case Inst::And: {
       if (CR0.isEmptySet() || CR1.isEmptySet()) {
-	Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
-	break;
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+        break;
       }
 
       APInt umin = APIntOps::umin(CR1.getUnsignedMax(), CR0.getUnsignedMax());
       if (umin.isAllOnesValue()) {
-	Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
-	break;
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
+        break;
       }
 
       APInt res = APInt::getNullValue(CR0.getBitWidth());
@@ -722,16 +723,15 @@ namespace souper {
       // set at bitPos. Barrier is the point beyond which you cannot set the bit
       // because it will be greater than the upper bound then
       if (!CR0.isWrappedSet() && !CR1.isWrappedSet() &&
-	  (lower1.countLeadingZeros() == upper1.countLeadingZeros()) &&
-	  (lower2.countLeadingZeros() == upper2.countLeadingZeros()) &&
-	  bitPos > 0) {
-	lower1.lshrInPlace(bitPos - 1);
-	lower2.lshrInPlace(bitPos - 1);
-	if (lower1.countTrailingOnes() == (CR0.getBitWidth() - lower1.countLeadingZeros()) &&
-	    lower2.countTrailingOnes() == (CR0.getBitWidth() - lower2.countLeadingZeros()))
-	{
+          (lower1.countLeadingZeros() == upper1.countLeadingZeros()) &&
+          (lower2.countLeadingZeros() == upper2.countLeadingZeros()) &&
+          bitPos > 0) {
+        lower1.lshrInPlace(bitPos - 1);
+        lower2.lshrInPlace(bitPos - 1);
+        if (lower1.countTrailingOnes() == (CR0.getBitWidth() - lower1.countLeadingZeros()) &&
+            lower2.countTrailingOnes() == (CR0.getBitWidth() - lower2.countLeadingZeros())) {
           res = APInt::getOneBitSet(CR0.getBitWidth(), bitPos - 1);
-	}
+        }
       }
 
       Result = llvm::ConstantRange(std::move(res), std::move(umin) + 1);
@@ -740,13 +740,12 @@ namespace souper {
     case Inst::Or: {
       if (CR0.isEmptySet() || CR1.isEmptySet()) {
         Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
-	break;
+        break;
       }
 
       APInt umax = APIntOps::umax(CR0.getUnsignedMin(), CR1.getUnsignedMin());
       APInt res = APInt::getNullValue(CR0.getBitWidth());
-      if (!CR0.isWrappedSet() && !CR1.isWrappedSet())
-      {
+      if (!CR0.isWrappedSet() && !CR1.isWrappedSet()) {
         APInt umaxupper = APIntOps::umax(CR0.getUnsignedMax(), CR1.getUnsignedMax());
         APInt uminupper = APIntOps::umin(CR0.getUnsignedMax(), CR1.getUnsignedMax());
         res = APInt::getLowBitsSet(CR0.getBitWidth(),
@@ -758,7 +757,7 @@ namespace souper {
       if (umax == res)
         Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
       else
-	Result = llvm::ConstantRange(std::move(umax), std::move(res));
+        Result = llvm::ConstantRange(std::move(umax), std::move(res));
       break;
     }
     case souper::Inst::ShlNSW :
@@ -779,23 +778,25 @@ namespace souper {
     case Inst::Ctlz:
     case Inst::Cttz:
       Result = llvm::ConstantRange(llvm::APInt(I->Width, 0),
-				   llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? I->Ops[0]->Width : (I->Ops[0]->Width + 1)));
+                                   llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ?
+                                               I->Ops[0]->Width :
+                                               (I->Ops[0]->Width + 1)));
       break;
     case Inst::CtPop:
       Result = llvm::ConstantRange(llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? 1 : 0),
-				   llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+                                   llvm::APInt(I->Width, I->Ops[0]->Width + 1));
       break;
     case Inst::Phi:
       Result = CR0.unionWith(CR1);
       break;
     case Inst::Select:
       if (CR0.getSetSize() == 1) {
-	if (CR0.contains(APInt(1, 1)))
-	  Result = CR1;
-	else if (CR0.contains(APInt(1, 0)))
-	  Result = CR2;
+        if (CR0.contains(APInt(1, 1)))
+          Result = CR1;
+        else if (CR0.contains(APInt(1, 0)))
+          Result = CR2;
       } else {
-	Result = CR1.unionWith(CR2);
+        Result = CR1.unionWith(CR2);
       }
       break;
       //     case Inst::SDiv: {
