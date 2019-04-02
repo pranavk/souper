@@ -14,10 +14,18 @@
 
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <cstdlib>
 
 namespace souper {
+
+  static llvm::cl::opt<unsigned> NumInputs("souper-pruning-num-inputs",
+					   llvm::cl::desc("Num of inputs to generate."),
+					   llvm::cl::init(0));
+  static llvm::cl::opt<unsigned> InputType("souper-pruning-input-type",
+					   llvm::cl::desc("0=random, 1=special"),
+					   llvm::cl::init(0));
 
 std::string getUniqueName() {
   static int counter = 0;
@@ -314,7 +322,8 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   std::vector<ValueCache> InputSets;
 
   ValueCache Cache;
-  constexpr unsigned PermutedLimit = 15;
+  if (InputType == 1) {
+  int PermutedLimit = NumInputs;
   std::string specialInputs = "abcde";
   std::unordered_set<std::string> Visited;
   do {
@@ -337,7 +346,9 @@ std::vector<ValueCache> PruningManager::generateInputSets(
     }
   } while (std::next_permutation(specialInputs.begin(), specialInputs.end()));
 
+  }
 
+/*
   for (auto &&I : Inputs) {
     if (I->K == souper::Inst::Var)
       Cache[I] = {llvm::APInt(I->Width, 0)};
@@ -372,9 +383,10 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   }
   if (isInputValid(Cache))
     InputSets.push_back(Cache);
-
-  constexpr int MaxTries = 100;
-  constexpr int NumLargeInputs = 5;
+*/
+  if (InputType == 0) {
+  constexpr int MaxTries = 100000;
+  int NumLargeInputs = NumInputs;
   std::srand(0);
   int i, m;
   for (i = 0, m = 0; i < NumLargeInputs && m < MaxTries; ++m ) {
@@ -391,7 +403,8 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   if (StatsLevel > 2 && i < NumLargeInputs) {
     llvm::errs() << "MaxTries (100) exhausted searching for large inputs.\n";
   }
-
+  }
+/*
   constexpr int NumSmallInputs = 5;
   for (i = 0, m = 0; i < NumSmallInputs && m < MaxTries; ++m ) {
     for (auto &&I : Inputs) {
@@ -407,7 +420,7 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   if (StatsLevel > 2 && i < NumSmallInputs) {
     llvm::errs() << "MaxTries (100) exhausted searching for small inputs.\n";
   }
-
+*/
   return InputSets;
 }
 
