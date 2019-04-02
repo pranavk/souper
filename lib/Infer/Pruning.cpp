@@ -291,41 +291,52 @@ bool PruningManager::isInputValid(ValueCache &Cache) {
   return false;
 }
 
+namespace {
+  llvm::APInt getSpecialAPInt(char c, unsigned width) {
+    switch (c) {
+    case 'a':
+      return llvm::APInt(width, -1);
+    case 'b':
+      return llvm::APInt(width, 1);
+    case 'c':
+      return llvm::APInt(width, 0);
+    case 'd':
+      return llvm::APInt::getSignedMaxValue(width);
+    case 'e':
+      return llvm::APInt::getSignedMinValue(width);
+    }
+    return llvm::APInt::getSignedMinValue(width);
+  }
+} // anon
+
 std::vector<ValueCache> PruningManager::generateInputSets(
   std::vector<Inst *> &Inputs) {
   std::vector<ValueCache> InputSets;
 
   ValueCache Cache;
-  for (auto &&I : Inputs) {
-    if (I->K == souper::Inst::Var)
-      Cache[I] = {llvm::APInt(I->Width, 0)};
-  }
-  if (isInputValid(Cache))
-    InputSets.push_back(Cache);
 
-  for (auto &&I : Inputs) {
-    if (I->K == souper::Inst::Var)
-      Cache[I] = {llvm::APInt(I->Width, 1)};
-  }
-  if (isInputValid(Cache))
-    InputSets.push_back(Cache);
+  constexpr unsigned PermutedLimit = 15;
+  std::string specialInputs = "abcde";
+  std::unordered_set<std::string> Visited;
+  do {
+    int i = 0;
+    std::string usedInput;
+    for (auto &&I : Inputs) {
+      if (I->K == souper::Inst::Var) {
+	usedInput.append(1, specialInputs[i]);
+	Cache[I] = getSpecialAPInt(specialInputs[i++], I->Width);
+      }
+    }
 
-  for (auto &&I : Inputs) {
-    if (I->K == souper::Inst::Var)
-      Cache[I] = {llvm::APInt(I->Width, -1)};
-  }
-  if (isInputValid(Cache))
-    InputSets.push_back(Cache);
-
-  for (auto &&I : Inputs) {
-    if (I->K == souper::Inst::Var)
-      Cache[I] = {llvm::APInt(I->Width, 0xFFF)};
-  }
-  if (isInputValid(Cache))
-    InputSets.push_back(Cache);
+    if (!Visited.count(usedInput) && isInputValid(Cache)) {
+      InputSets.push_back(Cache);
+      Visited.insert(usedInput);
+      if (InputSets.size() >= PermutedLimit) break;
+    }
+  } while (std::next_permutation(specialInputs.begin(), specialInputs.end()));
 
   constexpr int MaxTries = 100;
-  constexpr int NumLargeInputs = 5;
+  constexpr int NumLargeInputs = 3;
   std::srand(0);
   int i, m;
   for (i = 0, m = 0; i < NumLargeInputs && m < MaxTries; ++m ) {
@@ -343,7 +354,7 @@ std::vector<ValueCache> PruningManager::generateInputSets(
     llvm::errs() << "MaxTries (100) exhausted searching for large inputs.\n";
   }
 
-  constexpr int NumSmallInputs = 5;
+  constexpr int NumSmallInputs = 3;
   for (i = 0, m = 0; i < NumSmallInputs && m < MaxTries; ++m ) {
     for (auto &&I : Inputs) {
       if (I->K == souper::Inst::Var)
