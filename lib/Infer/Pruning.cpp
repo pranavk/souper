@@ -329,9 +329,9 @@ std::vector<ValueCache> PruningManager::generateInputSets(
     }
 
     if (!Visited.count(usedInput) && isInputValid(Cache)) {
+      if (InputSets.size() >= PermutedLimit) break;
       InputSets.push_back(Cache);
       Visited.insert(usedInput);
-      if (InputSets.size() >= PermutedLimit) break;
     }
   } while (std::next_permutation(specialInputs.begin(), specialInputs.end()));
 
