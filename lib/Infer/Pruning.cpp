@@ -335,8 +335,44 @@ std::vector<ValueCache> PruningManager::generateInputSets(
     }
   } while (std::next_permutation(specialInputs.begin(), specialInputs.end()));
 
+
+  for (auto &&I : Inputs) {
+    if (I->K == souper::Inst::Var)
+      Cache[I] = {llvm::APInt(I->Width, 0)};
+  }
+  if (isInputValid(Cache))
+    InputSets.push_back(Cache);
+
+  for (auto &&I : Inputs) {
+    if (I->K == souper::Inst::Var)
+      Cache[I] = {llvm::APInt(I->Width, 1)};
+  }
+  if (isInputValid(Cache))
+    InputSets.push_back(Cache);
+
+  for (auto &&I : Inputs) {
+    if (I->K == souper::Inst::Var)
+      Cache[I] = {llvm::APInt(I->Width, -1)};
+  }
+  if (isInputValid(Cache))
+    InputSets.push_back(Cache);
+
+  for (auto &&I : Inputs) {
+    if (I->K == souper::Inst::Var)
+      Cache[I] = {llvm::APInt::getSignedMaxValue(I->Width)};
+  }
+  if (isInputValid(Cache))
+    InputSets.push_back(Cache);
+
+  for (auto &&I : Inputs) {
+    if (I->K == souper::Inst::Var)
+      Cache[I] = {llvm::APInt::getSignedMinValue(I->Width)};
+  }
+  if (isInputValid(Cache))
+    InputSets.push_back(Cache);
+
   constexpr int MaxTries = 100;
-  constexpr int NumLargeInputs = 3;
+  constexpr int NumLargeInputs = 5;
   std::srand(0);
   int i, m;
   for (i = 0, m = 0; i < NumLargeInputs && m < MaxTries; ++m ) {
@@ -354,7 +390,7 @@ std::vector<ValueCache> PruningManager::generateInputSets(
     llvm::errs() << "MaxTries (100) exhausted searching for large inputs.\n";
   }
 
-  constexpr int NumSmallInputs = 3;
+  constexpr int NumSmallInputs = 5;
   for (i = 0, m = 0; i < NumSmallInputs && m < MaxTries; ++m ) {
     for (auto &&I : Inputs) {
       if (I->K == souper::Inst::Var)
