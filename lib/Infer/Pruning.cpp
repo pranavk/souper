@@ -14,10 +14,20 @@
 
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <cstdlib>
 
 namespace souper {
+
+  static llvm::cl::opt<bool> SolverInfeasibilityCheck("souper-solver-inf-check",
+					   llvm::cl::desc("Enable/disable solver infeasibility check."),
+					   llvm::cl::init(false));
+  static llvm::cl::opt<bool> DataflowInfeasibilityCheck("souper-df-inf-check",
+					   llvm::cl::desc("Enable/disable dataflow infeasibilty check."),
+					   llvm::cl::init(false));
+
+
 
 std::string getUniqueName() {
   static int counter = 0;
@@ -27,6 +37,11 @@ std::string getUniqueName() {
 // TODO : Comment out debug stmts and conditions before benchmarking
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
+
+  // For solver vs df infeasility check, disable all LHS with phi
+  if (LHSHasPhi)
+    return false;
+
   for (int I = 0; I < InputVals.size(); ++I) {
     if (StatsLevel > 2) {
       llvm::errs() << "  Input:\n";
@@ -77,7 +92,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
         auto Val = C.getValue();
         if (StatsLevel > 2)
           llvm::errs() << "  LHS value = " << Val << "\n";
-        if (!isConcrete(RHS)) {
+        if (!isConcrete(RHS) && DataflowInfeasibilityCheck) {
           auto CR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
             llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
@@ -108,7 +123,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
             }
             return true;
           }
-        } else {
+        } else if (isConcrete(RHS)) {
           auto RHSV = ConcreteInterpreters[I].evaluateInst(RHS);
           if (RHSV.hasValue()) {
             if (Val != RHSV.getValue()) {
@@ -124,7 +139,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
-  if (!LHSHasPhi) {
+  if (!LHSHasPhi && SolverInfeasibilityCheck) {
     return isInfeasibleWithSolver(RHS, StatsLevel);
   } else {
     return false;
@@ -136,7 +151,7 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
     auto C = ConcreteInterpreters[I].evaluateInst(SC.LHS);
     if (C.hasValue()) {
       auto Val = C.getValue();
-      if (!isConcrete(RHS, false, true)) {
+      if (!isConcrete(RHS, true, true)) {
         std::vector<Inst *> Holes, ModelVars;
         getReservedInsts(RHS, Holes);
         std::map<Inst *, Inst *> InstCache;
