@@ -221,8 +221,8 @@ void PruningManager::init() {
   }
 
   findVars(Ante, InputVars);
-
-  InputVals = generateInputSets(InputVars);
+  std::unordered_set<Inst*> UniqueInputVars(InputVars.begin(), InputVars.end());
+  InputVals = generateInputSets(UniqueInputVars);
 
   for (auto &&Input : InputVals) {
     ConcreteInterpreters.emplace_back(SC.LHS, Input);
@@ -310,15 +310,16 @@ namespace {
 } // anon
 
 std::vector<ValueCache> PruningManager::generateInputSets(
-  std::vector<Inst *> &Inputs) {
+  std::unordered_set<Inst *> &Inputs) {
   std::vector<ValueCache> InputSets;
 
   ValueCache Cache;
-
   constexpr unsigned PermutedLimit = 15;
   std::string specialInputs = "abcde";
   std::unordered_set<std::string> Visited;
   do {
+    if (InputSets.size() >= PermutedLimit) break;
+
     int i = 0;
     std::string usedInput;
     for (auto &&I : Inputs) {
@@ -328,10 +329,11 @@ std::vector<ValueCache> PruningManager::generateInputSets(
       }
     }
 
-    if (!Visited.count(usedInput) && isInputValid(Cache)) {
-      if (InputSets.size() >= PermutedLimit) break;
-      InputSets.push_back(Cache);
+    if (!Visited.count(usedInput)) {
       Visited.insert(usedInput);
+      if (isInputValid(Cache)) {
+	InputSets.push_back(Cache);
+      }
     }
   } while (std::next_permutation(specialInputs.begin(), specialInputs.end()));
 
