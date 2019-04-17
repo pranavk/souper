@@ -376,7 +376,7 @@ TEST(InterpreterTests, KnownBits) {
   ASSERT_EQ(KB.One, 5);
   ASSERT_EQ(KB.Zero, ~5);
 
-  Inst *I2 = IC.getInst(Inst::Var, 64, {});
+  Inst *I2 = IC.getInst(Inst::ReservedConst, 64, {});
   Inst *I3 = IC.getConst(llvm::APInt(64, 0xFF));
   Inst *I4 = IC.getInst(Inst::And, 64, {I2, I3});
   KB = souper::KnownBitsAnalysis().findKnownBits(I4, CI);
@@ -404,7 +404,7 @@ TEST(InterpreterTests, ConstantRange) {
   ASSERT_EQ(CR.getLower(), 5);
   ASSERT_EQ(CR.getUpper(), 6);
 
-  Inst *I2 = IC.getInst(Inst::Var, 64, {});
+  Inst *I2 = IC.getInst(Inst::ReservedConst, 64, {});
   Inst *I3 = IC.getConst(llvm::APInt(64, 0xFF));
   Inst *I4 = IC.getInst(Inst::And, 64, {I2, I3});
   CR = souper::ConstantRangeAnalysis().findConstantRange(I4, CI);
