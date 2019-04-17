@@ -313,10 +313,8 @@ namespace souper {
 			    });
   }
 
-  // Tries to get the concrete value from @I. If PartialEval is enabled, it tries to
-  // launch concrete interpreter to get the value. If not possible, it returns
-  // EvalValue of ValueKind::Unimplemented
-  EvalValue getValue(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
+  // Tries to get the concrete value from @I
+  EvalValue getValue(Inst *I, ConcreteInterpreter &CI) {
     if (I->K == Inst::Const)
       return {I->Val};
     else if (I->K == Inst::Var && !isReservedConst(I))
@@ -324,17 +322,17 @@ namespace souper {
       // evaluate anything.
       return CI.evaluateInst(I);
 
-    if (PartialEval && isConcrete(I))
+    if (isConcrete(I))
       return CI.evaluateInst(I);
 
     // unimplemented
     return EvalValue();
   }
 
-#define KB0 findKnownBits(I->Ops[0], CI, PartialEval)
-#define KB1 findKnownBits(I->Ops[1], CI, PartialEval)
-#define KB2 findKnownBits(I->Ops[2], CI, PartialEval)
-#define VAL(INST) getValue(INST, CI, PartialEval)
+#define KB0 findKnownBits(I->Ops[0], CI)
+#define KB1 findKnownBits(I->Ops[1], CI)
+#define KB2 findKnownBits(I->Ops[2], CI)
+#define VAL(INST) getValue(INST, CI)
 
   llvm::KnownBits mergeKnownBits(std::vector<llvm::KnownBits> Vec) {
     assert(Vec.size() > 0);
@@ -379,7 +377,7 @@ namespace souper {
     return false;
   }
 
-  llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI, bool PartialEval) {
+  llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI) {
     llvm::KnownBits Result(I->Width);
 
     if (cacheHasValue(I))
@@ -400,7 +398,7 @@ namespace souper {
     case Inst::Phi: {
       std::vector<llvm::KnownBits> vec;
       for (auto &Op : I->Ops) {
-        vec.emplace_back(findKnownBits(Op, CI, PartialEval));
+        vec.emplace_back(findKnownBits(Op, CI));
       }
       Result = mergeKnownBits(vec);
     }
@@ -626,9 +624,9 @@ namespace souper {
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
   }
 
-#define CR0 findConstantRange(I->Ops[0], CI, PartialEval)
-#define CR1 findConstantRange(I->Ops[1], CI, PartialEval)
-#define CR2 findConstantRange(I->Ops[2], CI, PartialEval)
+#define CR0 findConstantRange(I->Ops[0], CI)
+#define CR1 findConstantRange(I->Ops[1], CI)
+#define CR2 findConstantRange(I->Ops[2], CI)
 
   bool ConstantRangeAnalysis::cacheHasValue(Inst *I) {
     if (CRCache.find(I) != CRCache.end())
@@ -643,8 +641,7 @@ namespace souper {
   }
 
   llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
-                                                               ConcreteInterpreter &CI,
-                                                               bool PartialEval) {
+                                                               ConcreteInterpreter &CI) {
     llvm::ConstantRange Result(I->Width);
 
     if (cacheHasValue(I))

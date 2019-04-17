@@ -232,8 +232,8 @@ void PruningManager::init() {
     // Have to abstract interpret LHS because of phi
     LHSHasPhi = true;
     for (unsigned I = 0; I < InputVals.size(); I++) {
-      LHSKnownBits.push_back(KnownBitsAnalysis().findKnownBits(SC.LHS, ConcreteInterpreters[I], true));
-      LHSConstantRange.push_back(ConstantRangeAnalysis().findConstantRange(SC.LHS, ConcreteInterpreters[I], true));
+      LHSKnownBits.push_back(KnownBitsAnalysis().findKnownBits(SC.LHS, ConcreteInterpreters[I]));
+      LHSConstantRange.push_back(ConstantRangeAnalysis().findConstantRange(SC.LHS, ConcreteInterpreters[I]));
     }
   }
 

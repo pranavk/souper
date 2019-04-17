@@ -58,8 +58,7 @@ namespace souper {
 
   public:
     llvm::KnownBits findKnownBits(Inst *I,
-                                  ConcreteInterpreter &CI,
-                                  bool PartialEval = true);
+                                  ConcreteInterpreter &CI);
 
     static llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
                                                     Solver *S,
@@ -78,8 +77,7 @@ namespace souper {
 
   public:
     llvm::ConstantRange findConstantRange(souper::Inst *I,
-                                          ConcreteInterpreter &CI,
-                                          bool PartialEval = true);
+                                          ConcreteInterpreter &CI);
 
     static llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst *I,
                                                             Solver *S,
