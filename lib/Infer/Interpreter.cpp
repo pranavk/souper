@@ -382,16 +382,16 @@ namespace souper {
 #undef ARG2
 
   EvalValue ConcreteInterpreter::evaluateInst(Inst *Root) {
-    if (_Cache.find(Root) != _Cache.end())
-      return _Cache[Root];
+    if (Cache.find(Root) != Cache.end())
+      return Cache[Root];
 
     // TODO SmallVector
     std::vector<EvalValue> EvaluatedArgs;
     for (auto &&I : Root->Ops)
       EvaluatedArgs.push_back(evaluateInst(I));
     auto Result = evaluateSingleInst(Root, EvaluatedArgs);
-    if (_CacheWritable)
-      _Cache[Root] = Result;
+    if (CacheWritable)
+      Cache[Root] = Result;
     return Result;
   }
 }

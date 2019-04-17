@@ -97,18 +97,18 @@ EvalValue evaluateLShr(llvm::APInt A, llvm::APInt B);
 EvalValue evaluateAShr(llvm::APInt A, llvm::APInt B);
 
   class ConcreteInterpreter {
-    ValueCache _Cache;
-    bool _CacheWritable = false;
+    ValueCache Cache;
+    bool CacheWritable = false;
 
     EvalValue evaluateSingleInst(Inst *I, std::vector<EvalValue> &Args);
 
   public:
     ConcreteInterpreter() {}
-    ConcreteInterpreter(ValueCache &Input) : _Cache(Input) {}
-    ConcreteInterpreter(Inst *I, ValueCache &Input) : _Cache(Input) {
-      _CacheWritable = true;
+    ConcreteInterpreter(ValueCache &Input) : Cache(Input) {}
+    ConcreteInterpreter(Inst *I, ValueCache &Input) : Cache(Input) {
+      CacheWritable = true;
       evaluateInst(I);
-      _CacheWritable = false;
+      CacheWritable = false;
     }
 
     EvalValue evaluateInst(Inst *Root);
