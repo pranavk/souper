@@ -206,7 +206,7 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
 }
 
 PruningManager::PruningManager(
-  souper::SynthesisContext &SC_, std::vector<Inst *> &Inputs_, unsigned StatsLevel_)
+  souper::SynthesisContext &SC_, std::vector<Inst*> &Inputs_, unsigned StatsLevel_)
                   : SC(SC_), NumPruned(0),
                     TotalGuesses(0),
                     StatsLevel(StatsLevel_),
