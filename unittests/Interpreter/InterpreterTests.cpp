@@ -416,3 +416,29 @@ TEST(InterpreterTests, ConstantRange) {
   ASSERT_EQ(CR.getLower(), 5);
   ASSERT_EQ(CR.getUpper(), 0xFF + 5 + 1);
 }
+
+// Checks that ConcreteInterpreter only caches during construction, otherwise not
+TEST(InterpreterTests, ConcreteCache) {
+  InstContext IC;
+
+  Inst *I1 = IC.getConst(llvm::APInt(8, 0xFF));
+  Inst *I2 = IC.getInst(Inst::Var, 8, {});
+  Inst *I3 = IC.getInst(Inst::Or, 8, {I1, I2});
+
+  ValueCache InputValues = {{I2, APInt(8, 0x00)}};
+  souper::ConcreteInterpreter CI(InputValues);
+  auto Val = CI.evaluateInst(I3);
+  ASSERT_TRUE(Val.hasValue());
+
+  ASSERT_EQ(Val.getValue(), APInt(8, 0xFF));
+
+  // We want to ensure that evaluateInst call is *really* being evaluated
+  // instead of just returning the result from the cache; so let's change what
+  // I1 was pointing to, to see that.
+  *I1 = *IC.getConst(llvm::APInt(8, 0x0F));
+  Val = CI.evaluateInst(I3);
+  ASSERT_TRUE(Val.hasValue());
+
+  // We would have got 0xFF if evaluateInst had returned result from cache.
+  ASSERT_EQ(Val.getValue(), APInt(8, 0x0F, true));
+}
