@@ -458,12 +458,14 @@ namespace souper {
       // Note that only code inside BinaryTransferFunctionsKB is testable from
       // unit tests. Put minimum code outside it which you are sure of being
       // correct.
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[1]))
         Result.Zero.setLowBits(1);
       Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
       break;
     }
     case Inst::LShr : {
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[1]))
         Result.Zero.setHighBits(1);
       Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
@@ -472,6 +474,7 @@ namespace souper {
 //   case LShrExact:
 //     return "lshrexact";
     case Inst::AShr:
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[1])) {
         if (KB0.Zero[KB0.getBitWidth() - 1])
           Result.Zero.setHighBits(2);
@@ -513,6 +516,7 @@ namespace souper {
       // prune more stuff; so, let's keep both
       Inst *Constant = nullptr;
       llvm::KnownBits Other;
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[0])) {
         Constant = I->Ops[0];
         Other = KB1;
@@ -768,12 +772,14 @@ namespace souper {
       break;
     case Inst::Ctlz:
     case Inst::Cttz:
+      // Synthesized constant cannot be zero.
       Result = llvm::ConstantRange(llvm::APInt(I->Width, 0),
                                    llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ?
                                                I->Ops[0]->Width :
                                                (I->Ops[0]->Width + 1)));
       break;
     case Inst::CtPop:
+      // Synthesized constant cannot be zero.
       Result = llvm::ConstantRange(llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? 1 : 0),
                                    llvm::APInt(I->Width, I->Ops[0]->Width + 1));
       break;
