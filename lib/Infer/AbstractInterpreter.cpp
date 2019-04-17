@@ -337,27 +337,25 @@ namespace souper {
   llvm::KnownBits mergeKnownBits(std::vector<llvm::KnownBits> Vec) {
     assert(Vec.size() > 0);
 
-    auto width = Vec[0].getBitWidth();
+    auto Width = Vec[0].getBitWidth();
+#ifndef NDEBUG
     for (unsigned i = 1; i < Vec.size(); i++) {
-      if (width != Vec[i].getBitWidth())
+      if (Width != Vec[i].getBitWidth())
         llvm::report_fatal_error("mergeKnownBits: bitwidth should be same of all inputs");
     }
+#endif
 
-    KnownBits Result(width);
-    for (unsigned i = 0; i < width; i++) {
-      bool one = Vec[0].One[i];
-      bool zero = Vec[0].Zero[i];
-      for (unsigned j = 1; j < Vec.size(); j++) {
-        if (!one || !Vec[j].One[i])
-          one = false;
-        if (!zero || !Vec[j].Zero[i])
-          zero = false;
-      }
-      if (one)
-        Result.One.setBit(i);
-      if (zero)
-        Result.Zero.setBit(i);
+    APInt OneResult = APInt::getAllOnesValue(Width);
+    APInt ZeroResult = APInt::getAllOnesValue(Width);
+    for (unsigned i = 0; i < Vec.size(); i++) {
+      OneResult &= Vec[i].One;
+      ZeroResult &= Vec[i].Zero;
     }
+
+    KnownBits Result(Width);
+    Result.One = OneResult;
+    Result.Zero = ZeroResult;
+
     return Result;
   }
 
