@@ -17,6 +17,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "hiredis.h"
 
+#include <sstream>
+
 using namespace llvm;
 using namespace souper;
 
@@ -26,7 +28,12 @@ static cl::opt<unsigned> RedisPort("souper-redis-port", cl::init(6379),
 namespace souper {
 
 class KVStore::KVImpl {
-  redisContext *Ctx;
+  redisContext *Ctx = 0;
+
+private:
+  // checks if current redis database is compatible with current version of souper
+  bool checkCompatibility();
+
 public:
   KVImpl();
   ~KVImpl();
@@ -46,10 +53,63 @@ KVStore::KVImpl::KVImpl() {
     llvm::report_fatal_error((llvm::StringRef)"Redis connection error: " +
                              Ctx->errstr + "\n");
   }
+
+  if (!checkCompatibility()) {
+    llvm::report_fatal_error("Redis database on port %d is incompatible.", RedisPort);
+  }
 }
 
 KVStore::KVImpl::~KVImpl() {
   redisFree(Ctx);
+}
+
+bool KVStore::KVImpl::checkCompatibility() {
+  assert(Ctx && "Cannot check compatibility on an uninitialized database.");
+
+  redisReply *reply = static_cast<redisReply*>(redisCommand(Ctx, "GET cachetype"));
+  if (!reply || Ctx->err) {
+    llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
+  }
+
+  // get all current command line used
+  StringMap<cl::Option*> &Opts =  cl::getRegisteredOptions();
+  std::vector<std::string> ActiveOptions;
+  for (auto &K : Opts.keys()) {
+    if (Opts[K]->getNumOccurrences()) {
+      ActiveOptions.emplace_back(K.str());
+    }
+  }
+  std::sort(ActiveOptions.begin(), ActiveOptions.end());
+  std::ostringstream ActiveOptionsOSS;
+  const char *delim = ",";
+  std::copy(ActiveOptions.begin(), ActiveOptions.end(),
+	    std::ostream_iterator<std::string>(ActiveOptionsOSS, delim));
+  std::string ActiveOptionsStr = ActiveOptionsOSS.str();
+
+  bool compat = true;
+  switch(reply->type) {
+  case REDIS_REPLY_NIL:
+    // no version set
+    freeReplyObject(reply);
+    reply = static_cast<redisReply*>(redisCommand(Ctx, "SET cachetype %s", ActiveOptionsStr));
+    // TODO: Factor out all such snippets
+    if (!reply || Ctx->err) {
+      llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
+    }
+    break;
+  case REDIS_REPLY_STRING:
+  {
+    llvm::StringRef value = reply->str;
+    if (value != ActiveOptionsStr) {
+      compat = false;
+    }
+  }
+  break;
+  default:
+    compat = false;
+  }
+
+  return compat;
 }
 
 void KVStore::KVImpl::hIncrBy(llvm::StringRef Key, llvm::StringRef Field,
