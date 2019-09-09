@@ -251,6 +251,9 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
             ", LHS= " << LHSCost << ")\n";
         } else {
           llvm::outs() << "; RHS inferred successfully\n";
+	  ReplacementContext Context1;
+          PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
+                              Rep.Mapping.LHS, Context1);
         }
         if (PrintRepl) {
           PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
@@ -262,17 +265,22 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         } else {
           ReplacementContext Context;
           PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS,
-                              ReInferRHS ? Context : Contexts[Index]);
+                              Contexts[Index]);
         }
       } else {
         ++Fail;
         llvm::outs() << "; Failed to infer RHS\n";
+	ReplacementContext Context1;
+        PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
+                              Rep.Mapping.LHS, Context1);
         if (PrintRepl || PrintReplSplit) {
           ReplacementContext Context;
           PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
                               Rep.Mapping.LHS, Context);
         }
       }
+
+	llvm::outs() << '\n';
     } else if (InferConst) {
       ConstantSynthesis CS;
       std::map <Inst *, llvm::APInt> ResultConstMap;
@@ -292,12 +300,12 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
         if (!ResultConstMap.empty()) {
           ReplacementContext Context;
-          llvm::outs() << "; RHS inferred successfully\n";
+          llvm::outs() << "; RHS inferred successfulliy\n";
           PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
           ++Success;
         } else {
           ++Fail;
-          llvm::outs() << "; Failed to infer RHS\n";
+          llvm::outs() << "; Failed to infer RHSiy\n";
         }
       }
     } else {
