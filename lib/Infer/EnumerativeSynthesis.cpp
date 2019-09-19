@@ -25,7 +25,7 @@
 
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
-static const unsigned MaxLHSCands = 15;
+static const unsigned MaxLHSCands = 0;
 
 bool UseAlive;
 unsigned DebugLevel;
@@ -453,6 +453,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
     // if no empty slot, then push the guess to the result list
     if (CurrSlots.empty()) {
       std::vector<Inst *> empty;
+      if (souper::cost(JoinedGuess) > LHSCost) {
+        llvm::outs() << "Cost of Partial guess: " << souper::cost(JoinedGuess) << "\n";
+      }
       if (prune(JoinedGuess, empty)) {
         addGuess(JoinedGuess, JoinedGuess->Width, IC, LHSCost, Guesses, TooExpensive);
       }
@@ -736,7 +739,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
   // TODO(manasij7479) : If RHS is concrete, evaluate both sides
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
-  getGuesses(Guesses, Cands, SC.LHS->Width,
+  getGuesses(Guesses, Inputs, SC.LHS->Width,
              LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
@@ -771,9 +774,9 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::error_code EC;
   generateAndSortGuesses(SC, Guesses);
 
-  if (Guesses.empty()) {
+//  if (Guesses.empty()) {
     return EC;
-  }
+ // }
 
 
   if (UseAlive) {

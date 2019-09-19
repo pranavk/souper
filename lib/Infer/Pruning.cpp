@@ -14,8 +14,10 @@
 
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <cstdlib>
+#include <llvm/Support/FileSystem.h>
 
 namespace souper {
 
@@ -474,18 +476,37 @@ void PruningManager::init() {
 
   if (StatsLevel > 1) {
     DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
-      TotalGuesses++;
-      ReplacementContext RC;
-      RC.printInst(I, llvm::errs(), true);
-      if (isInfeasible(I, StatsLevel)) {
-        NumPruned++;
-        llvm::errs() << "Tally: "
-          << NumPruned << "/" << TotalGuesses << "\n";
-        llvm::errs() << "Pruned." << Inst::getKindName(I->K) << "\n\n";
-        return false;
-      }
-      llvm::errs() << "Could not prune." << Inst::getKindName(I->K) << "\n\n";
-      return true;
+        TotalGuesses++;
+
+        bool concrete = isConcrete(I);
+        ReplacementContext RC;
+        RC.printInst(I, llvm::errs(), true);
+
+        bool ret = true;
+        if (isInfeasible(I, StatsLevel)) {
+            NumPruned++;
+            llvm::errs() << "Tally: "
+                         << NumPruned << "/" << TotalGuesses << "\n";
+            llvm::errs() << "Pruned." << Inst::getKindName(I->K) << "\n\n";
+            ret = false;
+        }
+        if (ret) {
+            llvm::errs() << "Could not prune." << Inst::getKindName(I->K) << "\n\n";
+        }
+
+        if (concrete) {
+            ReplacementContext RC;
+
+            std::error_code ECOut;
+            std::string filename = ret ? "c_np" : "c_p";
+            llvm::raw_fd_ostream LHSOutFile("testlhs/" + filename + std::to_string(PruningManager::outputPrefix++),
+                                            ECOut,
+                                            llvm::sys::fs::F_Text);
+            RC.printInst(I, LHSOutFile, true);
+            LHSOutFile << "infer %" << RC.InstNames.size() - 1 << '\n';
+        }
+
+        return ret;
     };
   } else if (StatsLevel == 1) {
       DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
@@ -546,6 +567,8 @@ namespace {
     return llvm::APInt::getSignedMinValue(Width);
   }
 } // anon
+
+int PruningManager::outputPrefix = 1;
 
 std::vector<ValueCache> PruningManager::generateInputSets(
   std::vector<Inst *> &Inputs) {

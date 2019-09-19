@@ -39,6 +39,8 @@ public:
   bool isInfeasible(Inst *RHS, unsigned StatsLevel);
   bool isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel);
   void init();
+
+  static int outputPrefix;
   // double init antipattern, required because init should
   // not be called when pruning is disabled
 

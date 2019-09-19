@@ -201,14 +201,15 @@ struct BlockPCMapping {
 typedef std::vector<BlockPCMapping> BlockPCs;
 
 class ReplacementContext {
-  llvm::DenseMap<Inst *, std::string> InstNames;
   llvm::DenseMap<Block *, std::string> BlockNames;
   std::map<std::string, Inst *> NameToInst;
   std::map<std::string, Block *> NameToBlock;
   std::string printInstImpl(Inst *I, llvm::raw_ostream &Out, bool printNames, Inst *OrigI);
 
 public:
-  void printPCs(const std::vector<InstMapping> &PCs,
+    llvm::DenseMap<Inst *, std::string> InstNames;
+
+    void printPCs(const std::vector<InstMapping> &PCs,
                 llvm::raw_ostream &Out, bool printNames);
   void printBlockPCs(const BlockPCs &BPCs,
                      llvm::raw_ostream &Out, bool printNames);
