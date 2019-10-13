@@ -34,33 +34,33 @@ using namespace souper;
 using namespace llvm;
 
 static const std::vector<Inst::Kind> UnaryOperators = {
-  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz
+//  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz
 };
 
 static const std::vector<Inst::Kind> BinaryOperators = {
-  Inst::Add, Inst::Sub, Inst::Mul,
-  Inst::UDiv, Inst::SDiv,
-  Inst::URem, Inst::SRem,
-  Inst::And, Inst::Or, Inst::Xor,
-  Inst::Shl, Inst::AShr, Inst::LShr,
-  Inst::Eq, Inst::Ne, Inst::Ult,
-  Inst::Slt, Inst::Ule, Inst::Sle,
-  Inst::SAddSat, Inst::UAddSat,
-  Inst::SSubSat, Inst::USubSat,
+//  Inst::Add, Inst::Sub, Inst::Mul,
+//  Inst::UDiv, Inst::SDiv,
+//  Inst::URem, Inst::SRem,
+//  Inst::And, Inst::Or, Inst::Xor,
+//  Inst::Shl, Inst::AShr, Inst::LShr,
+//  Inst::Eq, Inst::Ne, Inst::Ult,
+//  Inst::Slt, Inst::Ule, Inst::Sle,
+ // Inst::SAddSat, //Inst::UAddSat,
+  Inst::SSubSat,// Inst::USubSat,
 
   /* Overflow intrinsics are synthesized always with `extractvalue`.
    * Main overflow intrinsics like {S,U}{Add,Sub,Mul}WithOverflow below means synthesizing
    * extractvalue with index 0. On the other hand, synthesizing suboperations like {U,S}{Add,Sub,Mul}O
    * means synthesizing extractvalue with index 1. */
-  Inst::SAddWithOverflow, Inst::UAddWithOverflow,
-  Inst::SSubWithOverflow, Inst::USubWithOverflow,
-  Inst::SMulWithOverflow, Inst::UMulWithOverflow,
-  Inst::SAddO, Inst::UAddO, Inst::SSubO,
-  Inst::USubO, Inst::SMulO, Inst::UMulO
+//  Inst::SAddWithOverflow, Inst::UAddWithOverflow,
+//  Inst::SSubWithOverflow, Inst::USubWithOverflow,
+//  Inst::SMulWithOverflow, Inst::UMulWithOverflow,
+//  Inst::SAddO, Inst::UAddO, Inst::SSubO,
+//  Inst::USubO, Inst::SMulO, Inst::UMulO
 };
 
 static const std::vector<Inst::Kind> TernaryOperators = {
-  Inst::Select, Inst::FShl, Inst::FShr
+//  Inst::Select, Inst::FShl, Inst::FShr
 };
 
 namespace {
@@ -138,10 +138,10 @@ void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std
     auto NTrunc = IC.getInst(Inst::Trunc, TargetWidth, { RHS });
     addGuess(NTrunc, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
   } else {
-    if (souper::cost(RHS) < MaxCost)
+//    if (souper::cost(RHS) < MaxCost)
       Guesses.push_back(RHS);
-    else
-      TooExpensive++;
+//    else
+//      TooExpensive++;
   }
 }
 
@@ -758,7 +758,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
   // TODO(manasij7479) : If RHS is concrete, evaluate both sides
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
-  getGuesses(Guesses, Cands, SC.LHS->Width,
+  getGuesses(Guesses, Inputs, SC.LHS->Width,
              LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
