@@ -461,6 +461,14 @@ void getGuesses(std::vector<Inst *> &Guesses,
       // plugin the new guess I to PrevInst
       std::map<Inst *, Inst *> InstCache;
       JoinedGuess = instJoin(PrevInst, PrevSlot, I, InstCache, IC);
+      llvm::errs() << "Leads to \n";
+      ReplacementContext RC;
+      if (JoinedGuess != nullptr)
+      RC.printInst(JoinedGuess, llvm::errs(), true);
+    }
+
+    if (JoinedGuess == nullptr) {
+      continue;
     }
 
     // get all empty slots from the newly plugged inst
@@ -760,6 +768,8 @@ void generateAndSortGuesses(SynthesisContext &SC,
 
   getGuesses(Guesses, Inputs, SC.LHS->Width,
              LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
+
+  llvm::errs() << "Guesses size : " << Guesses.size() << "\n";
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
   }
@@ -797,6 +807,12 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     return EC;
   }
 
+  llvm::errs() << "Guess size: " << Guesses.size() << "\n";
+  for (auto g : Guesses) {
+    ReplacementContext RC;
+    RC.printInst(g, llvm::errs(), true);
+    llvm::errs() << "\n";
+  }
 
   if (UseAlive) {
     return synthesizeWithAlive(SC, RHS, Guesses);
