@@ -11,11 +11,10 @@ jobs:
     
     - name: Verify
       env: 
-        API_VERSION: v3
-        API_HEADER: "Accept: application/vnd.github.${API_VERSION}+json; application/vnd.github.antiope-preview+json"
-        AUTH_HEADER: "Authorization: token ${{ secrets.GITHUB_TOKEN }} "
+        API_HEADER: "Accept: application/vnd.github.v3+json; application/vnd.github.antiope-preview+json"
+        AUTH_HEADER: "Authorization: token ${{ secrets.GITHUB_TOKEN }}"
         URI: https://api.github.com
       run: |
-        curl -sSL -H "${AUTH_HEADER}" -H "${API_HEADER}" -d '{"body":"Test comment"}' -H "Content-Type: application/json" -X POST "${URI}/repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments"
+        curl -sSL -H $AUTH_HEADER -H $API_HEADER -d '{"body":"Test comment"}' -H "Content-Type: application/json" -X POST "$URI/repos/${{ github.repository }}/issues/${{ github.number }}/comments"
         
       
