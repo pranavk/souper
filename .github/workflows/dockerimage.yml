@@ -15,6 +15,6 @@ jobs:
         AUTH_HEADER: "Authorization: token ${{ secrets.GITHUB_TOKEN }}"
         URI: "https://api.github.com"
       run: |
-        curl -sSL -H "$AUTH_HEADER" -H "$API_HEADER" -d '{"body":"Test comment"}' -H "Content-Type: application/json" -X POST "$URI/repos/${{ github.repository }}/issues/${{ github.number }}/comments"
+        NUMBER=$(jq --raw-output .number "$GITHUB_EVENT_PATH") curl -sSL -H "$AUTH_HEADER" -H "$API_HEADER" -d '{"body":"Test comment"}' -H "Content-Type: application/json" -X POST "$URI/repos/${{ github.repository }}/issues/$NUMBER/comments"
         
       
