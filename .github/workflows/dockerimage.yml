@@ -16,6 +16,7 @@ jobs:
         URI: "https://api.github.com"
       run: |
         NUMBER=$(jq --raw-output .number "${{ github.event_path }}") echo "action for $NUMBER with header: $AUTH_HEADER , Api header: $API_HEADER and URI: $URI"
+        cat "${{ github.event_path }}"
         NUMBER=$(jq --raw-output .number "${{ github.event_path }}") curl -sSL -H "$AUTH_HEADER" -H "$API_HEADER" -d '{"body":"Test comment"}' -H "Content-Type: application/json" -X POST "$URI/repos/${{ github.repository }}/issues/8/comments"
         
       
