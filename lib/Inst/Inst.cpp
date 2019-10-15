@@ -904,13 +904,16 @@ int souper::cost(Inst *I, bool IgnoreDepsWithExternalUses) {
 }
 
 
-static int countHelper(Inst *I, std::set<Inst *> &Visited) {
+int souper::countHelper(Inst *I, std::set<Inst *> &Visited) {
   if (!Visited.insert(I).second)
     return 0;
 
   int Count;
 
-  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::Hole)
+  // Main overflow intrinsics has a backing add/sub/mul operation which will be counted as one.
+  // Sub overflow operations ({Add,Sub,Mul}O variants) are not counted as they are not real instructions
+  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::UntypedConst ||
+      Inst::isOverflowIntrinsicMain(I->K) || Inst::isOverflowIntrinsicSub(I->K))
     Count = 0;
   else
     Count = 1;
@@ -1045,7 +1048,16 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
 
 /* TODO call findCands instead */
 void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
+  findInsts(Root, Vars, [](Inst *I) {
+    return I->K == Inst::Var && I->SynthesisConstID == 0;
+  });
+}
+
+void souper::findInsts(Inst *Root, std::vector<Inst *> &Insts, std::function<bool(Inst*)> Condition) {
   // breadth-first search
+  if (Root == nullptr)
+    return;
+
   std::set<Inst *> Visited;
   std::queue<Inst *> Q;
   Q.push(Root);
@@ -1054,8 +1066,8 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
     Q.pop();
     if (!Visited.insert(I).second)
       continue;
-    if (I->K == Inst::Var && I->SynthesisConstID == 0)
-      Vars.push_back(I);
+    if (Condition(I))
+      Insts.push_back(I);
     for (auto Op : I->Ops)
       Q.push(Op);
   }
@@ -1101,21 +1113,9 @@ void souper::getHoles(Inst *Root, std::vector<Inst *> &Holes) {
 }
 
 bool souper::hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester) {
-  // breadth-first search
-  std::set<Inst *> Visited;
-  std::queue<Inst *> Q;
-  Q.push(Root);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (InstTester(I))
-      return true;
-    if (!Visited.insert(I).second)
-      continue;
-    for (auto Op : I->Ops)
-      Q.push(Op);
-  }
-  return false;
+  std::vector<Inst*> Insts;
+  findInsts(Root, Insts, InstTester);
+  return Insts.size() > 0;
 }
 
 Inst *souper::getInstCopy(Inst *I, InstContext &IC,
@@ -1174,9 +1174,59 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   return Copy;
 }
 
+bool isTerminalInst(Inst *I) {
+  bool terminal;
+  switch (I->K) {
+    case Inst::Const:
+    case Inst::UntypedConst:
+    case Inst::Var:
+    case Inst::Phi:
+    case Inst::Hole:
+      terminal = true;
+      break;
+    default:
+      terminal = false;
+  }
+
+  return terminal;
+}
+
+// Return true if NewInst is equivalent to I
+bool isEquivalent(Inst *NewInst, Inst *I) {
+  // bfs on smaller instruction (NewInst)
+  if (I->K != NewInst->K || I->Ops.size() != NewInst->Ops.size())
+    return false;
+
+  if (isTerminalInst(I) && NewInst != I) {
+    return false;
+  }
+
+  for (int i = 0; i < I->Ops.size(); i++) {
+    if (!isEquivalent(I->Ops[i], NewInst->Ops[i]))
+      return false;
+  }
+
+  return true;
+}
+
+// Return true if NewInst is present in Cand.
+bool DAGMatch(Inst *NewInst, Inst *Cand) {
+  std::vector<Inst*> Results;
+  souper::findInsts(Cand, Results, [NewInst](Inst *I) {
+    if (isEquivalent(NewInst, I))
+      return true;
+    return false;
+  });
+  return Results.size();
+}
+
 Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
                        std::map<Inst *, Inst *> &InstCache,
                        InstContext &IC) {
+  if (DAGMatch(NewInst, I)) {
+    return nullptr;
+  }
+
   if (InstCache.count(I))
     return InstCache.at(I);
 
@@ -1184,6 +1234,8 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
 
   for (auto const &Op : I->Ops) {
     auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
+    if (NewOp == nullptr)
+      return nullptr;
     Ops.push_back(NewOp);
   }
 

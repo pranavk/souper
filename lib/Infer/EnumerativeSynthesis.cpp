@@ -88,6 +88,9 @@ namespace {
   static cl::opt<bool> SynthesisConstWithCegisLoop("souper-synthesis-const-with-cegis",
     cl::desc("Synthesis constants with CEGIS (default=false)"),
     cl::init(true));
+  static cl::opt<bool> DoubleCheckWithAlive("souper-double-check",
+    cl::desc("Double check synthesis result with alive (default=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -156,8 +159,8 @@ PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
   };
 }
 
-bool CountPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
-  if (!ReservedInsts.empty() && instCount(I) >= MaxNumInstructions)
+bool CountPrune(Inst *I, std::vector<Inst *> &ReservedInsts, std::set<Inst*> Visited) {
+  if (souper::countHelper(I, Visited) > MaxNumInstructions)
     return false;
 
   return true;
@@ -169,6 +172,20 @@ void getGuesses(std::vector<Inst *> &Guesses,
                 InstContext &IC, Inst *PrevInst, Inst *PrevSlot,
                 int &TooExpensive,
                 PruneFunc prune) {
+
+  std::vector<Inst *> unaryHoleUsers;
+  findInsts(PrevInst, unaryHoleUsers, [PrevSlot](Inst *I) {
+    return I->Ops.size() == 1 && I->Ops[0] == PrevSlot;
+  });
+
+  std::vector<Inst::Kind> unaryExclList;
+  if (unaryHoleUsers.size() == 1 &&
+      (unaryHoleUsers[0]->K == Inst::Ctlz ||
+       unaryHoleUsers[0]->K == Inst::Cttz ||
+       unaryHoleUsers[0]->K == Inst::BitReverse ||
+       unaryHoleUsers[0]->K == Inst::CtPop)) {
+    unaryExclList.push_back(Inst::BitReverse);
+  }
 
   std::vector<Inst *> PartialGuesses;
 
@@ -189,6 +206,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
   if (Width > 1) {
     for (auto K : UnaryOperators) {
       for (auto Comp : Comps) {
+        if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
+          continue;
+
         if (K == Inst::BSwap && Width % 16 != 0)
           continue;
 
@@ -242,13 +262,13 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if ((*J)->K == Inst::ReservedInst && (*J) != I2)
           continue;
 
-        // PRUNE: never useful to div, rem, sub, and, or, xor,
-        // icmp, select, usub.sat, ssub.sat, ashr, lshr a value against itself
+        // PRUNE: never useful to cmp, sub, and, or, xor, div, rem,
+        // usub.sat, ssub.sat, ashr, lshr a value against itself
         // Also do it for sub.overflow -- no sense to check for overflow when results = 0
         if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
                            K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
                            K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
-                           K == Inst::Select || K == Inst::USubSat || K == Inst::SSubSat ||
+                           K == Inst::USubSat || K == Inst::SSubSat ||
                            K == Inst::AShr || K == Inst::LShr || K == Inst::SSubWithOverflow ||
                            K == Inst::USubWithOverflow || K == Inst::SSubO || K == Inst::USubO))
           continue;
@@ -328,13 +348,13 @@ void getGuesses(std::vector<Inst *> &Guesses,
           auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(Inst::getOverflowComplement(K), 1, {V1, V2});
           auto Orig = IC.getInst(K, V1->Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(1, 0))});
+          N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(32, 0))});
         }
         else if (Inst::isOverflowIntrinsicSub(K)) {
           auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(K, 1, {V1, V2});
           auto Orig = IC.getInst(Inst::getOverflowComplement(K), V1->Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(1, 1))});
+          N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(32, 1))});
         }
         else {
           N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, {V1, V2});
@@ -441,6 +461,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
       // plugin the new guess I to PrevInst
       std::map<Inst *, Inst *> InstCache;
       JoinedGuess = instJoin(PrevInst, PrevSlot, I, InstCache, IC);
+    }
+
+    if (JoinedGuess == nullptr) {
+      continue;
     }
 
     // get all empty slots from the newly plugged inst
@@ -721,8 +745,13 @@ void generateAndSortGuesses(SynthesisContext &SC,
   std::vector<Inst *> Inputs;
   findVars(SC.LHS, Inputs);
   PruningManager DataflowPruning(SC, Inputs, DebugLevel);
+
+  std::set<Inst*> Visited(Cands.begin(), Cands.end());
+
   // Cheaper tests go first
-  std::vector<PruneFunc> PruneFuncs = {CountPrune};
+  std::vector<PruneFunc> PruneFuncs = { [&Visited](Inst *I, std::vector<Inst*> &ReservedInsts)  {
+    return CountPrune(I, ReservedInsts, Visited);
+  }};
   if (EnableDataflowPruning) {
     DataflowPruning.init();
     PruneFuncs.push_back(DataflowPruning.getPruneFunc());
@@ -772,11 +801,26 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     return EC;
   }
 
-
   if (UseAlive) {
     return synthesizeWithAlive(SC, RHS, Guesses);
   } else {
-    return synthesizeWithKLEE(SC, RHS, Guesses);
+    auto Ret = synthesizeWithKLEE(SC, RHS, Guesses);
+    if (DoubleCheckWithAlive && !Ret && RHS) {
+      if (isTransformationValid(LHS, RHS, PCs, IC)) {
+        return Ret;
+      } else {
+        llvm::errs() << "Transformation proved wrong by alive.";
+        ReplacementContext RC;
+        RC.printInst(LHS, llvm::errs(), /*printNames=*/true);
+        llvm::errs() << "=>";
+        ReplacementContext RC2;
+        RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
+        RHS = nullptr;
+        std::error_code EC;
+        return EC;
+      }
+    }
+    return Ret;
   }
 
   return EC;

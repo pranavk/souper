@@ -11,10 +11,12 @@
 #include "alive2/smt/smt.h"
 #include "alive2/smt/solver.h"
 #include "alive2/tools/transform.h"
+#include "alive2/util/config.h"
 #include "alive2/util/errors.h"
 #include "alive2/util/symexec.h"
 
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <iostream>
 #include <memory>
@@ -31,6 +33,11 @@ bool startsWith(const std::string &pre, const std::string &str) {
 }
 
 namespace {
+
+static llvm::cl::opt<bool> DisableUndefInput("alive-disable-undef-input",
+  llvm::cl::desc("Assume inputs can not be undef (default = false)"),
+  llvm::cl::init(false));
+
 class FunctionBuilder {
 public:
   FunctionBuilder(IR::Function &F_) : F(F_) {}
@@ -46,6 +53,15 @@ public:
     return append
       (std::make_unique<IR::BinOp>
       (t, std::move(name), *toValue(t, a), *toValue(t, b), others...));
+  }
+
+  template <typename A, typename B, typename C, typename ...Others>
+  IR::Value *ternaryOp(IR::Type &t, std::string name, A a, B b, C c,
+                       Others... others) {
+    return append
+      (std::make_unique<IR::TernaryOp>
+      (t, std::move(name), *toValue(t, a), *toValue(t, b), *toValue(t, c),
+       others...));
   }
 
   template <typename A>
@@ -69,6 +85,12 @@ public:
     return append
       (std::make_unique<IR::ICmp>
       (t, std::move(name), cond, *toValue(t, a), *toValue(t, b)));
+  }
+
+  IR::Value *extractvalue(IR::Type &t, std::string name, IR::Value *a, unsigned idx) {
+    auto p = std::make_unique<IR::ExtractValue>(t, std::move(name), *toValue(t, a));
+    p->addIdx(idx);
+    return append(p);
   }
 
   IR::Value *var(IR::Type &t, std::string name) {
@@ -136,7 +158,7 @@ private:
     if (auto It = identifiers.find(x); It != identifiers.end()) {
       return It->second;
     } else {
-      if (x.find("dummy") != std::string::npos) {
+      if (x.find(souper::ReservedConstPrefix) != std::string::npos) {
         auto i = std::make_unique<IR::ConstantInput>(t, std::move(x));
         auto ptr = i.get();
 //         F.addInput(std::move(i));
@@ -207,9 +229,7 @@ performCegisFirstQuery(tools::Transform &t,
   for (auto &[Var, Val] : TgtState.getValues()) {
     auto &Name = Var->getName();
     if (startsWith("%reservedconst", Name)) {
-      auto App = Val.first.value.isApp();
-      assert(App);
-      SMTConsts[Name] = (Z3_get_app_arg(smt::ctx(), App, 1));
+      SMTConsts[Name] = Val.first.value;
     }
   }
 
@@ -244,6 +264,7 @@ performCegisFirstQuery(tools::Transform &t,
 std::map<souper::Inst *, llvm::APInt>
 synthesizeConstantUsingSolver(tools::Transform &t,
   std::map<std::string, souper::Inst *> &SouperConsts) {
+  return {};
 
   IR::Value::reset_gbl_id();
   IR::State SrcState(t.src, true), tgt_state(t.tgt, false);
@@ -321,6 +342,9 @@ souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &I
 
   if (!translateRoot(LHS, PreCondition, LHSF, LExprCache)) {
     llvm::report_fatal_error("Failed to translate LHS.\n");
+  }
+  if (DisableUndefInput) {
+    util::config::disable_undef_input = true;
   }
 }
 
@@ -415,10 +439,23 @@ souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext
   return ConstMap;
 }
 
+void souper::AliveDriver::copyInputs(souper::AliveDriver::Cache &From,
+                                     souper::AliveDriver::Cache &To,
+                                     IR::Function &RHS) {
+  for (auto &[I, Val] : From) {
+    if (I->K == Inst::Kind::Var) {
+      auto Input = std::make_unique<IR::Input>(Val->getType(),
+                                               std::string(NameMap[I]));
+      To[I] = Input.get();
+      RHS.addInput(std::move(Input));
+    }
+  }
+}
 
 bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   RExprCache.clear();
   IR::Function RHSF;
+  copyInputs(LExprCache, RExprCache, RHSF);
   if (!translateRoot(RHS, RHSAssumptions, RHSF, RExprCache)) {
     llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
@@ -499,12 +536,22 @@ std::string getUniqueName() {
 bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
                                             IR::Function &F,
                                             Cache &ExprCache) {
+  // unused translation; this is souper's internal instruction to represent overflow instructions
+  if (souper::Inst::isOverflowIntrinsicSub(I->K)) {
+    return true; 
+  }
+
   if (ExprCache.find(I) != ExprCache.end()) {
     return true; // Already translated
   }
 
+  auto Ops = I->Ops;
+  if (souper::Inst::isOverflowIntrinsicMain(I->K)) {
+    Ops = Ops[0]->Ops;
+  }
+
   FunctionBuilder Builder(F);
-  for (auto &&Op : I->Ops) {
+  for (auto &&Op : Ops) {
     if (!translateAndCache(Op, F, ExprCache)) {
       return false;
     }
@@ -526,6 +573,9 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     Name = "%" + std::to_string(InstNumbers++);
     // FIXME: Somewhere the non-input variable names are discarded,
     // forcing AliveDriver to name variables on its own.
+  }
+  if (I->K == Inst::Var) {
+    NameMap[I] = Name;
   }
 
   auto &t = getType(I->Width);
@@ -553,9 +603,22 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
       return true;
     }
 
+    case souper::Inst::ExtractValue: {
+      unsigned idx = I->Ops[1]->Val.getLimitedValue();
+      assert(idx <= 1 && "Only extractvalue with overflow instructions are supported.");
+      ExprCache[I] = Builder.extractvalue(t, Name, ExprCache[I->Ops[0]], idx);
+      return true;
+    }
+
     #define BINOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {    \
       ExprCache[I] = Builder.binOp(t, Name, ExprCache[I->Ops[0]],\
       ExprCache[I->Ops[1]], IR::BinOp::ALIVE);                   \
+      return true;                                               \
+    }
+
+    #define BINOPOV(SOUPER, ALIVE) case souper::Inst::SOUPER: {  \
+      ExprCache[I] = Builder.binOp(t, Name, ExprCache[Ops[0]],   \
+      ExprCache[Ops[1]], IR::BinOp::ALIVE);                      \
       return true;                                               \
     }
 
@@ -606,6 +669,21 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOP(UAddSat, UAdd_Sat)
     BINOP(SSubSat, SSub_Sat)
     BINOP(USubSat, USub_Sat)
+    BINOPOV(SAddWithOverflow, SAdd_Overflow)
+    BINOPOV(UAddWithOverflow, UAdd_Overflow)
+    BINOPOV(SSubWithOverflow, SSub_Overflow)
+    BINOPOV(USubWithOverflow, USub_Overflow)
+    BINOPOV(SMulWithOverflow, SMul_Overflow)
+    BINOPOV(UMulWithOverflow, UMul_Overflow)
+
+    #define TERNOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {   \
+      ExprCache[I] = Builder.ternaryOp(t, Name, ExprCache        \
+      [I->Ops[0]], ExprCache[I->Ops[1]], ExprCache[I->Ops[2]],   \
+      IR::TernaryOp::ALIVE); return true;                        \
+    }
+
+    TERNOP(FShl, FShl);
+    TERNOP(FShr, FShr);
 
     #define ICMP(SOUPER, ALIVE) case souper::Inst::SOUPER: {     \
       ExprCache[I] = Builder.iCmp(t, Name, IR::ICmp::ALIVE,      \
