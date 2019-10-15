@@ -105,6 +105,42 @@ KnownBits KBTesting::clearLowest(KnownBits x) {
   report_fatal_error("faulty clearLowest!");
 }
 
+llvm::APInt concat(llvm::APInt A, llvm::APInt B) {
+  auto W = A.getBitWidth() + B.getBitWidth();
+  return (A.zext(W) << B.getBitWidth()) | B.zext(W);
+}
+
+EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y,
+                                  llvm::KnownBits z, Inst::Kind Pred) {
+  if (!x.isConstant())
+    return merge(bruteForce(setLowest(x), y, z, Pred),
+                 bruteForce(clearLowest(x), y, z, Pred));
+  if (!y.isConstant())
+    return merge(bruteForce(x, setLowest(y), z,  Pred),
+                 bruteForce(x, clearLowest(y), z, Pred));
+
+  if (!z.isConstant())
+    return merge(bruteForce(x, y, setLowest(z), Pred),
+                 bruteForce(x, y, clearLowest(z), Pred));
+  auto xc = x.getConstant();
+  auto yc = y.getConstant();
+  auto zc = z.getConstant();
+  EvalValue Result;
+  switch (Pred) {
+    case Inst::Select:
+      Result = (xc != 0) ? yc : zc;
+      break;
+    case Inst::FShl:
+      Result = (concat(xc, yc) << (zc.urem(WIDTH))).trunc(WIDTH);
+      break;
+    case Inst::FShr:
+      Result  = (concat(xc, yc).lshr(zc.urem(WIDTH))).trunc(WIDTH);
+      break;
+    default:
+      report_fatal_error("Unhandled ternary operator.");
+  }
+  return Result;
+}
 EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   if (!x.isConstant())
     return merge(bruteForce(setLowest(x), y, Pred),
@@ -116,7 +152,6 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   auto yc = y.getConstant();
 
   EvalValue res;
-  bool rcInit = true;
   APInt rc(x.getBitWidth(), 0);
   switch (Pred) {
   case Inst::AddNUW:
@@ -223,103 +258,79 @@ bool KBTesting::nextKB(llvm::KnownBits &x) {
   return false;
 }
 
-bool KBTesting::testFn(Inst::Kind pred) {
-  llvm::KnownBits x(WIDTH);
+bool testKB(llvm::KnownBits Calculated, EvalValueKB Expected,
+            Inst::Kind K, std::vector<llvm::KnownBits> KBS) {
+  // expected value is poison/ub; so let binary transfer functions do
+  // whatever they want without complaining
+  if (!Expected.hasValue())
+    return true;
+
+  if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
+    llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
+                  << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
+    return false;
+  }
+  if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
+    llvm::errs() << "Expected or Given result has a conflict\n";
+    return false;
+  }
+
+  if (KnownBitsAnalysis::isConflictingKB(Calculated, Expected.ValueKB)) {
+    outs() << "Unsound!! " << Inst::getKindName(K) << "\nInputs: ";
+    for (auto KB : KBS) {
+      outs() << KnownBitsAnalysis::knownBitsString(KB) << " ";
+    }
+    outs() << "\nCalculated: " << KnownBitsAnalysis::knownBitsString(Calculated) << '\n';
+    outs() << "Expected: " << KnownBitsAnalysis::knownBitsString(Expected.ValueKB) << '\n';
+    return false;
+  }
+  return true;
+}
+
+bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
+                              size_t Op1W, size_t Op2W) {
+  llvm::KnownBits x(Op0W);
   do {
-    llvm::KnownBits y(WIDTH);
+    llvm::KnownBits y(Op1W);
     do {
-      KnownBits Calculated;
-      switch(pred) {
-      case Inst::AddNUW:
-      case Inst::AddNW:
-      case Inst::Add:
-        Calculated = BinaryTransferFunctionsKB::add(x, y);
-        break;
-      case Inst::AddNSW:
-        Calculated = BinaryTransferFunctionsKB::addnsw(x, y);
-        break;
-      case Inst::SubNUW:
-      case Inst::SubNW:
-      case Inst::Sub:
-        Calculated = BinaryTransferFunctionsKB::sub(x, y);
-        break;
-      case Inst::SubNSW:
-        Calculated = BinaryTransferFunctionsKB::subnsw(x, y);
-        break;
-      case Inst::Mul:
-        Calculated = BinaryTransferFunctionsKB::mul(x, y);
-        break;
-      case Inst::UDiv:
-        Calculated = BinaryTransferFunctionsKB::udiv(x, y);
-        break;
-      case Inst::URem:
-        Calculated = BinaryTransferFunctionsKB::urem(x, y);
-        break;
-      case Inst::And:
-        Calculated = BinaryTransferFunctionsKB::and_(x, y);
-        break;
-      case Inst::Or:
-        Calculated = BinaryTransferFunctionsKB::or_(x, y);
-        break;
-      case Inst::Xor:
-        Calculated = BinaryTransferFunctionsKB::xor_(x, y);
-        break;
-      case Inst::Shl:
-        Calculated = BinaryTransferFunctionsKB::shl(x, y);
-        break;
-      case Inst::LShr:
-        Calculated = BinaryTransferFunctionsKB::lshr(x, y);
-        break;
-      case Inst::AShr:
-        Calculated = BinaryTransferFunctionsKB::ashr(x, y);
-        break;
-      case Inst::Eq:
-        Calculated = BinaryTransferFunctionsKB::eq(x, y);
-        break;
-      case Inst::Ne:
-        Calculated = BinaryTransferFunctionsKB::ne(x, y);
-        break;
-      case Inst::Ult:
-        Calculated = BinaryTransferFunctionsKB::ult(x, y);
-        break;
-      case Inst::Slt:
-        Calculated = BinaryTransferFunctionsKB::slt(x, y);
-        break;
-      case Inst::Ule:
-        Calculated = BinaryTransferFunctionsKB::ule(x, y);
-        break;
-      case Inst::Sle:
-        Calculated = BinaryTransferFunctionsKB::sle(x, y);
-        break;
-      default:
-        report_fatal_error("unhandled case in testFn!");
-      }
+      llvm::KnownBits z(Op2W);
+      do {
+        InstContext IC;
+        auto Op0 = IC.getInst(Inst::Var, Op0W, {});
+        auto Op1 = IC.getInst(Inst::Var, Op1W, {});
+        auto Op2 = IC.getInst(Inst::Var, Op2W, {});
+        auto I = IC.getInst(K, WIDTH, {Op0, Op1, Op2});
+        std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}, {Op2, z}};
+        KnownBitsAnalysis KB(C);
+        ConcreteInterpreter BlankCI;
+        auto Calculated = KB.findKnownBits(I, BlankCI, false);
+        auto Expected = bruteForce(x, y, z, K);
+        if (!testKB(Calculated, Expected, K, {x, y, z})) {
+          return false;
+        }
+      } while (nextKB(z));
+    } while (nextKB(y));
+  } while (nextKB(x));
 
-      EvalValueKB Expected = bruteForce(x, y, pred);
-      // expected value is poison/ub; so let binary transfer functions do
-      // whatever they want without complaining
-      if (!Expected.hasValue())
-        continue;
-
-      if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
-        llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
-                     << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
+  return true;
+}
+bool KBTesting::testFn(Inst::Kind K, size_t Op0W, size_t Op1W) {
+  llvm::KnownBits x(Op0W);
+  do {
+    llvm::KnownBits y(Op1W);
+    do {
+      InstContext IC;
+      auto Op0 = IC.getInst(Inst::Var, Op0W, {});
+      auto Op1 = IC.getInst(Inst::Var, Op1W, {});
+      auto I = IC.getInst(K, WIDTH, {Op0, Op1});
+      std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}};
+      KnownBitsAnalysis KB(C);
+      ConcreteInterpreter BlankCI;
+      auto Calculated = KB.findKnownBits(I, BlankCI, false);
+      EvalValueKB Expected = bruteForce(x, y, K);
+      if (!testKB(Calculated, Expected, K, {x, y})) {
         return false;
       }
-      if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
-        llvm::errs() << "Expected or Given result has a conflict\n";
-        return false;
-      }
-
-      if (KnownBitsAnalysis::isConflictingKB(Calculated, Expected.ValueKB)) {
-        outs() << "Unsound!! " << Inst::getKindName(pred) << '\n';
-        outs() << KnownBitsAnalysis::knownBitsString(x) << ' ' << Inst::getKindName(pred)
-               << ' ' << KnownBitsAnalysis::knownBitsString(y) << '\n';
-        outs() << "Calculated: " << KnownBitsAnalysis::knownBitsString(Calculated) << '\n';
-        outs() << "Expected: " << KnownBitsAnalysis::knownBitsString(Expected.ValueKB) << '\n';
-        return false;
-      }
-
     } while(nextKB(y));
   } while(nextKB(x));
 

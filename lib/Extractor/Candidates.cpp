@@ -47,14 +47,6 @@ static llvm::cl::opt<bool> HarvestDataFlowFacts(
     "souper-harvest-dataflow-facts",
     llvm::cl::desc("Perform data flow analysis (default=true)"),
     llvm::cl::init(true));
-static llvm::cl::opt<bool> HarvestDemandedBits(
-    "souper-harvest-demanded-bits",
-    llvm::cl::desc("Perform demanded bits analysis (default=true)"),
-    llvm::cl::init(true));
-static llvm::cl::opt<bool> HarvestConstantRange(
-    "souper-harvest-const-range",
-    llvm::cl::desc("Perform range analysis (default=true)"),
-    llvm::cl::init(true));
 static llvm::cl::opt<bool> HarvestUses(
     "souper-harvest-uses",
     llvm::cl::desc("Harvest operands (default=false)"),
@@ -86,6 +78,10 @@ static llvm::cl::opt<bool> PrintSignBitsAtReturn(
 static llvm::cl::opt<bool> PrintRangeAtReturn(
     "print-range-at-return",
     llvm::cl::desc("Print range inforation in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintDemandedBitsAtReturn(
+    "print-demanded-bits-from-harvester",
+    llvm::cl::desc("Print demanded bits (default=false)"),
     llvm::cl::init(false));
 
 extern bool UseAlive;
@@ -208,7 +204,8 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   KnownBits Known(Width);
   bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
   unsigned NumSignBits = 1;
-  if (HarvestDataFlowFacts)
+  ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
+  if (HarvestDataFlowFacts) {
     if (V->getType()->isIntOrIntVectorTy(Width) ||
         V->getType()->isPtrOrPtrVectorTy()) {
       computeKnownBits(V, Known, DL);
@@ -219,8 +216,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
       NumSignBits = ComputeNumSignBits(V, DL);
     }
 
-    ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
-    if (HarvestConstantRange && V->getType()->isIntegerTy()) {
+    if (V->getType()->isIntegerTy()) {
       if (Instruction *I = dyn_cast<Instruction>(V)) {
         // TODO: Find out a better way to get the current basic block
         // with this approach, we might be restricting the constant
@@ -234,6 +230,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
         Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
       }
     }
+  }
 
   return IC.createVar(Width, Name, Range, Known.Zero, Known.One, NonZero, NonNegative,
                       PowOfTwo, Negative, NumSignBits, 0);
@@ -935,6 +932,31 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
     for (auto &I : BB) {
       if (isa<ReturnInst>(I))
         PrintDataflowInfo(F, I, LVI, SE);
+
+      // Note: Demanded bits is a backward dataflow analysis and it computes
+      // the dataflow fact at the leaves of a DAG (input parameters of a given
+      // function). The API 'getDemandedBits' computes demanded bits for an
+      // LLVM instruction, and to avoid computation of this fact for each
+      // instruction, we special-cased it to only compute demanded bits for an
+      // "addition of input variable with zero" (add x, 0) instruction only.
+      // This is just a hack to make it work.
+      if (PrintDemandedBitsAtReturn && I.getType()->isIntegerTy()) {
+        if (auto BO = dyn_cast<BinaryOperator>(&I)) {
+          auto AddOp = BO->getOpcode();
+          if (AddOp == Instruction::Add) {
+            if (auto ConstZeroOp = dyn_cast<ConstantInt>(BO->getOperand(1))) {
+              if (ConstZeroOp->isZero()) {
+                APInt DemandedBitsVal = DB->getDemandedBits(&I);
+                llvm::outs() << "demanded-bits from compiler for "
+                             << I.getName() << " : "
+                             << Inst::getDemandedBitsString(DemandedBitsVal)
+                             << "\n";
+              }
+            }
+          }
+        }
+      }
+
       // Harvest Uses (Operands)
       if (HarvestUses) {
         std::unordered_set<llvm::Instruction *> Visited;
@@ -964,7 +986,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       if (I.hasNUses(0))
         continue;
       Inst *In;
-      if (HarvestDemandedBits) {
+      if (HarvestDataFlowFacts) {
         APInt DemandedBits = DB->getDemandedBits(&I);
         In = EB.get(&I, DemandedBits);
       } else {
