@@ -144,6 +144,7 @@ struct Inst : llvm::FoldingSetNode {
   bool hasOrigin(llvm::Value *V) const;
 
   void Profile(llvm::FoldingSetNodeID &ID) const;
+  void Print();
 
   static const char *getKindName(Kind K);
   static std::string getKnownBitsString(llvm::APInt Zero, llvm::APInt One);
