@@ -97,6 +97,9 @@ namespace {
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
+  static cl::opt<bool> PrintGuesses("souper-enumerative-synthesis-print-guesses",
+         cl::desc("Print enumerative synthesis guesses (default=false)"),
+         cl::init(false));
 }
 
 // TODO
@@ -175,7 +178,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
                 int Width, int LHSCost,
                 InstContext &IC, Inst *PrevInst, Inst *PrevSlot,
                 int &TooExpensive,
-                PruneFunc prune) {
+                PruneFunc prune, unsigned level) {
 
   std::vector<Inst *> unaryHoleUsers;
   findInsts(PrevInst, unaryHoleUsers, [PrevSlot](Inst *I) {
@@ -197,259 +200,260 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
   // Conversion Operators
   for (auto Comp : Comps) {
-    if (Comp->Width == Width)
-      continue;
-
     addGuess(Comp, Width, IC, LHSCost, PartialGuesses, TooExpensive);
   }
 
-  Inst *I1 = IC.getReservedInst();
-  Comps.push_back(I1);
+  std::set<Inst*> Visited(Inputs.begin(), Inputs.end());
+  int count = PrevInst == nullptr ? 0 : souper::countHelper(PrevInst, Visited);
+  bool canFillInsts = true || count < MaxNumInstructions;
+  if (canFillInsts) {
+    Inst *I1 = IC.getReservedInst();
+    Comps.push_back(I1);
 
-  // Unary Operators
-  if (Width > 1) {
-    for (auto K : UnaryOperators) {
-      for (auto Comp : Comps) {
-        if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
-          continue;
+    // Unary Operators
+    if (Width > 1) {
+      for (auto K : UnaryOperators) {
+        for (auto Comp : Comps) {
+          if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
+            continue;
 
-        if (K == Inst::BSwap && Width % 16 != 0)
-          continue;
+          if (K == Inst::BSwap && Width % 16 != 0)
+            continue;
 
-        if (Comp->K == Inst::ReservedInst) {
-          auto V = IC.createHole(Width);
-          auto N = IC.getInst(K, Width, { V });
-          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
-          continue;
-        }
-
-        if (Comp->Width != Width)
-          continue;
-
-        // Prune: unary operation on constant
-        if (Comp->K == Inst::ReservedConst)
-          continue;
-
-        auto N = IC.getInst(K, Width, { Comp });
-        addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
-      }
-    }
-  }
-
-  // reservedinst and reservedconsts starts with width 0
-  Inst *C1 = IC.getReservedConst();
-  Comps.push_back(C1);
-  Inst *I2 = IC.getReservedInst();
-  Comps.push_back(I2);
-
-  for (auto K : BinaryOperators) {
-    // PRUNE: one-bit shifts don't make sense
-    if (Inst::isShift(K) && Width == 1)
-      continue;
-
-    for (auto I = Comps.begin(); I != Comps.end(); ++I) {
-      // Prune: only one of (mul x, C), (mul C, x) is allowed
-      if ((Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) || Inst::isOverflowIntrinsicSub(K)) &&
-          (*I)->K == Inst::ReservedConst)
-        continue;
-
-      // Prune: I1 should only be the first argument
-      if ((*I)->K == Inst::ReservedInst && (*I) != I1)
-        continue;
-
-      // PRUNE: don't try commutative operators both ways
-      auto Start = (Inst::isCommutative(K) ||
-		      Inst::isOverflowIntrinsicMain(K) ||
-		      Inst::isOverflowIntrinsicSub(K)) ? I : Comps.begin();
-      for (auto J = Start; J != Comps.end(); ++J) {
-        // Prune: I2 should only be the second argument
-        if ((*J)->K == Inst::ReservedInst && (*J) != I2)
-          continue;
-
-        // PRUNE: never useful to cmp, sub, and, or, xor, div, rem,
-        // usub.sat, ssub.sat, ashr, lshr a value against itself
-        // Also do it for sub.overflow -- no sense to check for overflow when results = 0
-        if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
-                           K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
-                           K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
-                           K == Inst::USubSat || K == Inst::SSubSat ||
-                           K == Inst::AShr || K == Inst::LShr || K == Inst::SSubWithOverflow ||
-                           K == Inst::USubWithOverflow || K == Inst::SSubO || K == Inst::USubO))
-          continue;
-
-        // PRUNE: never operate on two constants
-        if ((*I)->K == Inst::ReservedConst && (*J)->K == Inst::ReservedConst)
-          continue;
-
-        // see if we need to make a var representing a constant
-        // that we don't know yet
-
-        Inst *V1, *V2;
-        if (Inst::isCmp(K)) {
-
-          if ((*I)->Width == 0 && (*J)->Width == 0) {
-            // TODO: support (cmp hole, hole);
+          if (Comp->K == Inst::ReservedInst) {
+            auto V = IC.createHole(Width);
+            auto N = IC.getInst(K, Width, {V});
+            addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
             continue;
           }
 
-          if ((*I)->Width == 0) {
+          if (Comp->Width != Width)
+            continue;
+
+          // Prune: unary operation on constant
+          if (Comp->K == Inst::ReservedConst)
+            continue;
+
+          auto N = IC.getInst(K, Width, {Comp});
+          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
+        }
+      }
+    }
+
+    // reservedinst and reservedconsts starts with width 0
+    Inst *C1 = IC.getReservedConst();
+    Comps.push_back(C1);
+    Inst *I2 = IC.getReservedInst();
+    Comps.push_back(I2);
+
+    for (auto K : BinaryOperators) {
+      // PRUNE: one-bit shifts don't make sense
+      if (Inst::isShift(K) && Width == 1)
+        continue;
+
+      for (auto I = Comps.begin(); I != Comps.end(); ++I) {
+        // Prune: only one of (mul x, C), (mul C, x) is allowed
+        if ((Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) || Inst::isOverflowIntrinsicSub(K)) &&
+            (*I)->K == Inst::ReservedConst)
+          continue;
+
+        // Prune: I1 should only be the first argument
+        if ((*I)->K == Inst::ReservedInst && (*I) != I1)
+          continue;
+
+        // PRUNE: don't try commutative operators both ways
+        auto Start = (Inst::isCommutative(K) ||
+                      Inst::isOverflowIntrinsicMain(K) ||
+                      Inst::isOverflowIntrinsicSub(K)) ? I : Comps.begin();
+        for (auto J = Start; J != Comps.end(); ++J) {
+          // Prune: I2 should only be the second argument
+          if ((*J)->K == Inst::ReservedInst && (*J) != I2)
+            continue;
+
+          // PRUNE: never useful to cmp, sub, and, or, xor, div, rem,
+          // usub.sat, ssub.sat, ashr, lshr a value against itself
+          // Also do it for sub.overflow -- no sense to check for overflow when results = 0
+          if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
+                             K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
+                             K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
+                             K == Inst::USubSat || K == Inst::SSubSat ||
+                             K == Inst::AShr || K == Inst::LShr || K == Inst::SSubWithOverflow ||
+                             K == Inst::USubWithOverflow || K == Inst::SSubO || K == Inst::USubO))
+            continue;
+
+          // PRUNE: never operate on two constants
+          if ((*I)->K == Inst::ReservedConst && (*J)->K == Inst::ReservedConst)
+            continue;
+
+          // see if we need to make a var representing a constant
+          // that we don't know yet
+
+          Inst *V1, *V2;
+          if (Inst::isCmp(K)) {
+
+            if ((*I)->Width == 0 && (*J)->Width == 0) {
+              // TODO: support (cmp hole, hole);
+              continue;
+            }
+
+            if ((*I)->Width == 0) {
+              if ((*I)->K == Inst::ReservedConst) {
+                // (cmp const, comp)
+                V1 = IC.createSynthesisConstant((*J)->Width, (*I)->SynthesisConstID);
+              } else if ((*I)->K == Inst::ReservedInst) {
+                // (cmp hole, comp)
+                V1 = IC.createHole((*J)->Width);
+              }
+            } else {
+              V1 = *I;
+            }
+
+            if ((*J)->Width == 0) {
+              if ((*J)->K == Inst::ReservedConst) {
+                // (cmp comp, const)
+                V2 = IC.createSynthesisConstant((*I)->Width, (*J)->SynthesisConstID);
+              } else if ((*J)->K == Inst::ReservedInst) {
+                // (cmp comp, hole)
+                V2 = IC.createHole((*I)->Width);
+              }
+            } else {
+              V2 = *J;
+            }
+          } else {
             if ((*I)->K == Inst::ReservedConst) {
-              // (cmp const, comp)
-              V1 = IC.createSynthesisConstant((*J)->Width, (*I)->SynthesisConstID);
+              // (binop const, comp)
+              V1 = IC.createSynthesisConstant(Width, (*I)->SynthesisConstID);
             } else if ((*I)->K == Inst::ReservedInst) {
-              // (cmp hole, comp)
-              V1 = IC.createHole((*J)->Width);
+              // (binop hole, comp)
+              V1 = IC.createHole(Width);
+            } else {
+              V1 = *I;
             }
-          } else {
-            V1 = *I;
-          }
 
-          if ((*J)->Width == 0) {
             if ((*J)->K == Inst::ReservedConst) {
-              // (cmp comp, const)
-              V2 = IC.createSynthesisConstant((*I)->Width, (*J)->SynthesisConstID);
+              // (binop comp, const)
+              V2 = IC.createSynthesisConstant(Width, (*J)->SynthesisConstID);
             } else if ((*J)->K == Inst::ReservedInst) {
-              // (cmp comp, hole)
-              V2 = IC.createHole((*I)->Width);
+              // (binop comp, hole)
+              V2 = IC.createHole(Width);
+            } else {
+              V2 = *J;
             }
-          } else {
-            V2 = *J;
-          }
-        } else {
-          if ((*I)->K == Inst::ReservedConst) {
-            // (binop const, comp)
-            V1 = IC.createSynthesisConstant(Width, (*I)->SynthesisConstID);
-          } else if ((*I)->K == Inst::ReservedInst) {
-            // (binop hole, comp)
-            V1 = IC.createHole(Width);
-          } else {
-            V1 = *I;
           }
 
-          if ((*J)->K == Inst::ReservedConst) {
-            // (binop comp, const)
-            V2 = IC.createSynthesisConstant(Width, (*J)->SynthesisConstID);
-          } else if ((*J)->K == Inst::ReservedInst) {
-            // (binop comp, hole)
+          if (V1->Width != V2->Width)
+            continue;
+
+          if (!(Inst::isCmp(K) || Inst::isOverflowIntrinsicSub(K)) && V1->Width != Width)
+            continue;
+
+          // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
+          if (K == Inst::Sub && V2->SynthesisConstID != 0)
+            continue;
+
+          Inst *N = nullptr;
+          if (Inst::isOverflowIntrinsicMain(K)) {
+            auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), V1->Width, {V1, V2});
+            auto Comp1 = IC.getInst(Inst::getOverflowComplement(K), 1, {V1, V2});
+            auto Orig = IC.getInst(K, V1->Width + 1, {Comp0, Comp1});
+            N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(32, 0))});
+          } else if (Inst::isOverflowIntrinsicSub(K)) {
+            auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), V1->Width,
+                                    {V1, V2});
+            auto Comp1 = IC.getInst(K, 1, {V1, V2});
+            auto Orig = IC.getInst(Inst::getOverflowComplement(K), V1->Width + 1, {Comp0, Comp1});
+            N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(32, 1))});
+          } else {
+            N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, {V1, V2});
+          }
+
+          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
+        }
+      }
+    }
+
+    // Deal with ternary instructions separately, since some guesses might
+    // need two reserved per instruction
+    Inst *C2 = IC.getReservedConst();
+    Comps.push_back(C2);
+    Inst *C3 = IC.getReservedConst();
+    Comps.push_back(C3);
+    Inst *I3 = IC.getReservedInst();
+    Comps.push_back(I3);
+
+    for (auto Op : TernaryOperators) {
+      for (auto I : Comps) {
+        if (I->K == Inst::ReservedInst && I != I1)
+          continue;
+        if (I->K == Inst::ReservedConst && I != C1)
+          continue;
+
+        // (select c, x, y)
+        // PRUNE: a select's control input should never be constant
+        if (Op == Inst::Select && I->K == Inst::ReservedConst)
+          continue;
+
+        Inst *V1;
+        if (I->K == Inst::ReservedConst) {
+          V1 = IC.createSynthesisConstant(Width, I->SynthesisConstID);
+        } else if (I->K == Inst::ReservedInst) {
+          V1 = IC.createHole(Op == Inst::Select ? 1 : Width);
+        } else {
+          V1 = I;
+        }
+
+        if (Op == Inst::Select && V1->Width != 1)
+          continue;
+        if (Op != Inst::Select && V1->Width != Width)
+          continue;
+
+        for (auto J : Comps) {
+          if (J->K == Inst::ReservedInst && J != I2)
+            continue;
+          if (J->K == Inst::ReservedConst && J != C2)
+            continue;
+
+          Inst *V2;
+          if (J->K == Inst::ReservedConst) {
+            V2 = IC.createSynthesisConstant(Width, J->SynthesisConstID);
+          } else if (J->K == Inst::ReservedInst) {
             V2 = IC.createHole(Width);
           } else {
-            V2 = *J;
-          }
-        }
-
-        if (V1->Width != V2->Width)
-          continue;
-
-        if (!(Inst::isCmp(K) || Inst::isOverflowIntrinsicSub(K)) && V1->Width != Width)
-          continue;
-
-        // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
-        if (K == Inst::Sub && V2->SynthesisConstID != 0)
-          continue;
-
-        Inst *N = nullptr;
-        if (Inst::isOverflowIntrinsicMain(K)) {
-          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), V1->Width, {V1, V2});
-          auto Comp1 = IC.getInst(Inst::getOverflowComplement(K), 1, {V1, V2});
-          auto Orig = IC.getInst(K, V1->Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(32, 0))});
-        }
-        else if (Inst::isOverflowIntrinsicSub(K)) {
-          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), V1->Width, {V1, V2});
-          auto Comp1 = IC.getInst(K, 1, {V1, V2});
-          auto Orig = IC.getInst(Inst::getOverflowComplement(K), V1->Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(32, 1))});
-        }
-        else {
-          N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, {V1, V2});
-        }
-
-        addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
-      }
-    }
-  }
-
-  // Deal with ternary instructions separately, since some guesses might
-  // need two reserved per instruction
-  Inst *C2 = IC.getReservedConst();
-  Comps.push_back(C2);
-  Inst *C3 = IC.getReservedConst();
-  Comps.push_back(C3);
-  Inst *I3 = IC.getReservedInst();
-  Comps.push_back(I3);
-
-  for (auto Op : TernaryOperators) {
-    for (auto I : Comps) {
-      if (I->K == Inst::ReservedInst && I != I1)
-        continue;
-      if (I->K == Inst::ReservedConst && I != C1)
-        continue;
-
-      // (select c, x, y)
-      // PRUNE: a select's control input should never be constant
-      if (Op == Inst::Select && I->K == Inst::ReservedConst)
-        continue;
-
-      Inst *V1;
-      if (I->K == Inst::ReservedConst) {
-        V1 = IC.createSynthesisConstant(Width, I->SynthesisConstID);
-      } else if (I->K == Inst::ReservedInst) {
-        V1 = IC.createHole(Op == Inst::Select ? 1 : Width);
-      } else {
-        V1 = I;
-      }
-
-      if (Op == Inst::Select && V1->Width != 1)
-        continue;
-      if (Op != Inst::Select && V1->Width != Width)
-        continue;
-
-      for (auto J : Comps) {
-        if (J->K == Inst::ReservedInst && J != I2)
-          continue;
-        if (J->K == Inst::ReservedConst && J != C2)
-          continue;
-
-        Inst *V2;
-        if (J->K == Inst::ReservedConst) {
-          V2 = IC.createSynthesisConstant(Width, J->SynthesisConstID);
-        } else if (J->K == Inst::ReservedInst) {
-          V2 = IC.createHole(Width);
-        } else {
-          V2 = J;
-        }
-
-        if (V2->Width != Width)
-          continue;
-
-        for (auto K : Comps) {
-          if (K->K == Inst::ReservedInst && K != I3)
-            continue;
-          if (K->K == Inst::ReservedConst && K != C3)
-            continue;
-
-          // PRUNE: ter-op c, c, c
-          if (I->K == Inst::ReservedConst && J->K == Inst::ReservedConst && K->K == Inst::ReservedConst)
-            continue;
-
-          // PRUNE: (select cond, x, x)
-          if (Op == Inst::Select && J == K)
-            continue;
-
-          Inst *V3;
-          if (K->K == Inst::ReservedConst) {
-            V3 = IC.createSynthesisConstant(Width, K->SynthesisConstID);
-          } else if (K->K == Inst::ReservedInst) {
-            V3 = IC.createHole(Width);
-          } else {
-            V3 = K;
+            V2 = J;
           }
 
-          if (V2->Width != V3->Width)
+          if (V2->Width != Width)
             continue;
 
-          auto N = IC.getInst(Op, Width, {V1, V2, V3});
-          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
+          for (auto K : Comps) {
+            if (K->K == Inst::ReservedInst && K != I3)
+              continue;
+            if (K->K == Inst::ReservedConst && K != C3)
+              continue;
+
+            // PRUNE: ter-op c, c, c
+            if (I->K == Inst::ReservedConst && J->K == Inst::ReservedConst && K->K == Inst::ReservedConst)
+              continue;
+
+            // PRUNE: (select cond, x, x)
+            if (Op == Inst::Select && J == K)
+              continue;
+
+            Inst *V3;
+            if (K->K == Inst::ReservedConst) {
+              V3 = IC.createSynthesisConstant(Width, K->SynthesisConstID);
+            } else if (K->K == Inst::ReservedInst) {
+              V3 = IC.createHole(Width);
+            } else {
+              V3 = K;
+            }
+
+            if (V2->Width != V3->Width)
+              continue;
+
+            auto N = IC.getInst(Op, Width, {V1, V2, V3});
+            addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
+          }
         }
       }
     }
@@ -475,6 +479,12 @@ void getGuesses(std::vector<Inst *> &Guesses,
     if (CurrSlots.empty()) {
       std::vector<Inst *> empty;
       if (prune(JoinedGuess, empty)) {
+        if (PrintGuesses) {
+          llvm::errs() << std::string(level, '\t') << "level " << level << "\n";
+          ReplacementContext RC;
+          RC.printInst(JoinedGuess, llvm::errs(), true);
+          llvm::errs() << "\n";
+        }
         addGuess(JoinedGuess, JoinedGuess->Width, IC, LHSCost, Guesses, TooExpensive);
       }
       continue;
@@ -483,9 +493,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
     // if there exist empty slots, then call getGuesses() recursively
     // and fill the empty slots
     if (prune(JoinedGuess, CurrSlots)) {
-      for (auto S : CurrSlots)
+      for (auto S : CurrSlots) {
         getGuesses(Guesses, Inputs, S->Width,
-                   LHSCost, IC, JoinedGuess, S, TooExpensive, prune);
+                   LHSCost, IC, JoinedGuess, S, TooExpensive, prune, level + 1);
+      }
     }
   }
 }
@@ -763,7 +774,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
   getGuesses(Guesses, Cands, SC.LHS->Width,
-             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
+             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, 0);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
   }
@@ -781,6 +792,14 @@ void generateAndSortGuesses(SynthesisContext &SC,
                      return souper::cost(a) < souper::cost(b);
                    });
 
+  if (PrintGuesses) {
+    llvm::errs() << "Printing all guesses: \n";
+    for (auto Guess : Guesses) {
+      ReplacementContext RC;
+      RC.printInst(Guess, llvm::errs(), true);
+      llvm::errs() << "\n";
+    }
+  }
   if (DebugLevel > 1)
     llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
 }

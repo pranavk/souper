@@ -912,7 +912,7 @@ int souper::countHelper(Inst *I, std::set<Inst *> &Visited) {
 
   // Main overflow intrinsics has a backing add/sub/mul operation which will be counted as one.
   // Sub overflow operations ({Add,Sub,Mul}O variants) are not counted as they are not real instructions
-  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::UntypedConst ||
+  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::UntypedConst || I->K == Inst::Hole ||
       Inst::isOverflowIntrinsicMain(I->K) || Inst::isOverflowIntrinsicSub(I->K))
     Count = 0;
   else
