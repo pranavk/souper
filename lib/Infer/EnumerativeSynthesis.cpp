@@ -97,6 +97,9 @@ namespace {
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
+  static cl::opt<bool> PrintGuesses("souper-enumerative-synthesis-print-guesses",
+         cl::desc("Print enumerative synthesis guesses (default=false)"),
+         cl::init(false));
 }
 
 // TODO
@@ -175,7 +178,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
                 int Width, int LHSCost,
                 InstContext &IC, Inst *PrevInst, Inst *PrevSlot,
                 int &TooExpensive,
-                PruneFunc prune) {
+                PruneFunc prune, unsigned level) {
 
   std::vector<Inst *> unaryHoleUsers;
   findInsts(PrevInst, unaryHoleUsers, [PrevSlot](Inst *I) {
@@ -483,9 +486,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
     // if there exist empty slots, then call getGuesses() recursively
     // and fill the empty slots
     if (prune(JoinedGuess, CurrSlots)) {
-      for (auto S : CurrSlots)
+      for (auto S : CurrSlots) {
         getGuesses(Guesses, Inputs, S->Width,
-                   LHSCost, IC, JoinedGuess, S, TooExpensive, prune);
+                   LHSCost, IC, JoinedGuess, S, TooExpensive, prune, level + 1);
+      }
     }
   }
 }
@@ -763,7 +767,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
   getGuesses(Guesses, Cands, SC.LHS->Width,
-             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
+             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, 0);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
   }
@@ -781,6 +785,14 @@ void generateAndSortGuesses(SynthesisContext &SC,
                      return souper::cost(a) < souper::cost(b);
                    });
 
+  if (PrintGuesses) {
+    llvm::errs() << "Printing all guesses: \n";
+    for (auto Guess : Guesses) {
+      ReplacementContext RC;
+      RC.printInst(Guess, llvm::errs(), true);
+      llvm::errs() << "\n";
+    }
+  }
   if (DebugLevel > 1)
     llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
 }
