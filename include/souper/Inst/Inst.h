@@ -160,6 +160,7 @@ struct Inst : llvm::FoldingSetNode {
   static bool isOverflowIntrinsicSub(Kind K);
   static Kind getOverflowComplement(Kind K);
   static Kind getBasicInstrForOverflow(Kind K);
+  static bool IsEquivalent(Inst *A, Inst *B);
 
   static bool isCommutative(Kind K);
   static bool isShift(Kind K);

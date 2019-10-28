@@ -486,9 +486,25 @@ void getGuesses(std::vector<Inst *> &Guesses,
     // if there exist empty slots, then call getGuesses() recursively
     // and fill the empty slots
     if (prune(JoinedGuess, CurrSlots)) {
+      bool done = false;
       for (auto S : CurrSlots) {
+        unsigned old = 0;
+        auto start = std::chrono::steady_clock::now();
+        if (done) {
+          old = Guesses.size();
+        }
+        //llvm::errs() << static_cast<void*>(JoinedGuess) << " " << static_cast<void*>(S) << '\n';
         getGuesses(Guesses, Inputs, S->Width,
                    LHSCost, IC, JoinedGuess, S, TooExpensive, prune, level + 1);
+        if (done) {
+          auto end = std::chrono::steady_clock::now();
+          old = Guesses.size() - old;
+          llvm::errs() << "Extra guesses generated: " << old
+          << " Time took: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+          << '\n';
+        }
+        break;
+        done = false;
       }
     }
   }
@@ -780,10 +796,29 @@ void generateAndSortGuesses(SynthesisContext &SC,
   // one of the real advantages of this approach to synthesis vs
   // CEGIS is that we can synthesize in precisely increasing cost
   // order, and not try to somehow teach the solver how to do that
-  std::stable_sort(Guesses.begin(), Guesses.end(),
-                   [](Inst *a, Inst *b) -> bool {
-                     return souper::cost(a) < souper::cost(b);
-                   });
+//  std::stable_sort(Guesses.begin(), Guesses.end(),
+//                   [](Inst *a, Inst *b) -> bool {
+//                     return souper::cost(a) < souper::cost(b);
+//                   });
+
+// find duplicates
+  std::vector<Inst*> set;
+  unsigned duplicate = 0;
+  for (auto &g : Guesses) {
+    if (auto it = std::find_if(set.begin(), set.end(), [&g](Inst *A) {return Inst::IsEquivalent(A, g); }); it != set.end()) {
+      ReplacementContext RC;
+      RC.printInst(g, llvm::errs(), true);
+      llvm::errs() << "----" << '\n';
+      ReplacementContext RC1;
+      RC1.printInst(*it, llvm::errs(), true);
+      llvm::errs() << "\n";
+      duplicate++;
+    } else {
+      set.emplace_back(g);
+    }
+  }
+
+  llvm::errs() << "Duplicates : " << duplicate << '\n';
 
   if (PrintGuesses) {
     llvm::errs() << "Printing all guesses: \n";

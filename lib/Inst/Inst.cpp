@@ -458,6 +458,50 @@ const char *Inst::getKindName(Kind K) {
   }
 }
 
+bool isTerminalInst(Inst *I) {
+  switch (I->K) {
+    case Inst::Const:
+    case Inst::UntypedConst:
+    case Inst::Var:
+    case Inst::Phi:
+    case Inst::Hole:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool Inst::IsEquivalent(Inst *A, Inst *B) {
+  if (A->K != B->K || A->Ops.size() != B->Ops.size())
+    return false;
+
+  if (A->K == Inst::Const || A->K == Inst::UntypedConst) {
+    if (A->Val != B->Val)
+      return false;
+  }
+
+  if (A->K == Inst::Var) {
+    // false if one is reservedcosnt and other is not
+    bool res1 = A->Name.find("reservedconst_") != std::string::npos;
+    bool res2= B->Name.find("reservedconst_") != std::string::npos;
+    if (res1 ^ res2) {
+      return false;
+    }
+
+    if (!res1 && !res2) {
+      if (A->Name != B->Name)
+        return false;
+    }
+  }
+
+  for (unsigned i = 0; i < A->Ops.size(); i++) {
+    if (!IsEquivalent(A->Ops[i], B->Ops[i]))
+      return false;
+  }
+
+  return true;
+}
+
 Inst::Kind Inst::getKind(std::string Name) {
   return llvm::StringSwitch<Inst::Kind>(Name)
                    .Case("var", Inst::Var)
