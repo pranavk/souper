@@ -503,7 +503,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           << " Time took: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
           << '\n';
         }
-        break;
+        //break;
         done = false;
       }
     }
@@ -723,7 +723,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
 
   for (auto I : Guesses) {
     GuessIndex++;
-    if (DebugLevel > 0) {
+    if (DebugLevel > 2) {
       llvm::errs() << "\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
       ReplacementContext RC;
       RC.printInst(I, llvm::errs(), /*printNames=*/true);
@@ -818,10 +818,10 @@ void generateAndSortGuesses(SynthesisContext &SC,
   // one of the real advantages of this approach to synthesis vs
   // CEGIS is that we can synthesize in precisely increasing cost
   // order, and not try to somehow teach the solver how to do that
-//  std::stable_sort(Guesses.begin(), Guesses.end(),
-//                   [](Inst *a, Inst *b) -> bool {
-//                     return souper::cost(a) < souper::cost(b);
-//                   });
+  std::stable_sort(Guesses.begin(), Guesses.end(),
+                   [](Inst *a, Inst *b) -> bool {
+                     return souper::cost(a) < souper::cost(b);
+                   });
 
 // find duplicates
 //  std::vector<Inst*> set;
