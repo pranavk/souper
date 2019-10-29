@@ -41,6 +41,9 @@ public:
 
 private:
   PruningManager *Pruner = nullptr;
+
+    void isSatisfiableWrapper(std::string basicString, bool sat, unsigned long size, std::vector<llvm::APInt> *pVector,
+                              unsigned int timeout);
 };
 }
 

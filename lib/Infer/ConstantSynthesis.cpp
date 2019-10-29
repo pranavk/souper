@@ -30,6 +30,29 @@ namespace {
 }
 namespace souper {
 
+    struct Result_t {
+        std::vector<llvm::APInt> values;
+        bool sat;
+    };
+  static std::unordered_map<std::string, Result_t> cache;
+
+    std::error_code isSatisfiableWrapper(SMTLIBSolver *SMTSolver, std::string Query, bool &IsSat, unsigned long size,
+                                                 std::vector<llvm::APInt> *pVector, unsigned int Timeout) {
+      std::error_code EC;
+      if (cache.find(Query) != cache.end()) {
+        llvm::errs() << "cached " << '\n';
+        *pVector = cache[Query].values;
+        IsSat = cache[Query].sat;
+        return EC;
+      }
+
+      std::vector<llvm::APInt> valvec;
+      EC = SMTSolver->isSatisfiable(Query, IsSat, size, &valvec, Timeout);
+      cache[Query] = {valvec, IsSat};
+      *pVector = valvec;
+      return EC;
+    }
+
 std::error_code
 ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                               const BlockPCs &BPCs,
@@ -85,8 +108,8 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);
 
-    EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInstsFirstQuery.size(),
-                                  &ModelValsFirstQuery, Timeout);
+    //llvm::errs() << "CS1 query: " << Query << '\n';
+    EC = souper::isSatisfiableWrapper(SMTSolver, Query, IsSat, ModelInstsFirstQuery.size(), &ModelValsFirstQuery, Timeout);
 
     if (EC) {
       if (DebugLevel > 3) {
@@ -165,7 +188,9 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);
 
-    EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInstsSecondQuery.size(),
+    //llvm::errs() << "CS2 query: " << Query << '\n';
+
+    EC = souper::isSatisfiableWrapper(SMTSolver, Query, IsSat, ModelInstsSecondQuery.size(),
                                   &ModelValsSecondQuery, Timeout);
     if (EC) {
       if (DebugLevel > 3) {
@@ -226,5 +251,6 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   }
   return EC;
 }
+
 
 }

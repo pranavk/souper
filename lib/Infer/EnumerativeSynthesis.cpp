@@ -630,6 +630,7 @@ std::error_code isConcreteCandidateSat(SynthesisContext &SC, Inst *RHSGuess, boo
 
   std::string Query2 = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, 0);
 
+ // llvm::errs() << "Query: " << Query2 << '\n';
   EC = SC.SMTSolver->isSatisfiable(Query2, IsSat, 0, 0, SC.Timeout);
   if (EC && DebugLevel > 1) {
     llvm::errs() << "verification query failed!\n";
@@ -690,6 +691,25 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
+std::unordered_map<int ,int> NormalizeConstNames(std::set<Inst*> &ConstSet) {
+  int i = 0;
+  std::unordered_map<int, int> mapping;
+  for (auto &con : ConstSet) {
+      int old = std::stoi(con->Name.substr(con->Name.find("_") + 1));
+      mapping[old] = i;
+      con->Name = "reservedconst_" + std::to_string(i++);
+  }
+
+  return mapping;
+}
+
+void DeNormalizeConstNames(std::set<Inst*> &ConstSet, std::unordered_map<int, int> &mapping) {
+  for (auto &con : ConstSet) {
+    int current = std::stoi(con->Name.substr(con->Name.find("_") + 1));
+    con->Name = "reservedconst_" + std::to_string(mapping[current]);
+  }
+}
+
 std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
                                    const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
@@ -703,7 +723,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
 
   for (auto I : Guesses) {
     GuessIndex++;
-    if (DebugLevel > 2) {
+    if (DebugLevel > 0) {
       llvm::errs() << "\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
       ReplacementContext RC;
       RC.printInst(I, llvm::errs(), /*printNames=*/true);
@@ -712,6 +732,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
 
     std::set<Inst *> ConstSet;
     souper::getConstants(I, ConstSet);
+    auto mapping = NormalizeConstNames(ConstSet);
     bool GuessHasConstant = !ConstSet.empty();
     if (!GuessHasConstant) {
       bool IsSAT;
@@ -739,6 +760,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
       EC = CS.synthesize(SC.SMTSolver, SC.BPCs, SC.PCs, InstMapping (SC.LHS, I), ConstSet,
                          ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout);
       if (!ResultConstMap.empty()) {
+        DeNormalizeConstNames(ConstSet, mapping);
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
         RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false);
@@ -802,23 +824,30 @@ void generateAndSortGuesses(SynthesisContext &SC,
 //                   });
 
 // find duplicates
-  std::vector<Inst*> set;
-  unsigned duplicate = 0;
-  for (auto &g : Guesses) {
-    if (auto it = std::find_if(set.begin(), set.end(), [&g](Inst *A) {return Inst::IsEquivalent(A, g); }); it != set.end()) {
-      ReplacementContext RC;
-      RC.printInst(g, llvm::errs(), true);
-      llvm::errs() << "----" << '\n';
-      ReplacementContext RC1;
-      RC1.printInst(*it, llvm::errs(), true);
-      llvm::errs() << "\n";
-      duplicate++;
-    } else {
-      set.emplace_back(g);
-    }
-  }
+//  std::vector<Inst*> set;
+//  unsigned duplicate = 0;
+//  for (auto &g : Guesses) {
+//    std::set<Inst*> ConstSet;
+//    if (souper::getConstants(g, ConstSet); !ConstSet.empty()) {
+//      continue;
+//    }
+//    if (auto it = std::find_if(set.begin(), set.end(), [&g](Inst *A) {return Inst::IsEquivalent(A, g); }); it != set.end()) {
+//      duplicate++;
+//
+//
+//      ReplacementContext RC;
+//      RC.printInst(g, llvm::errs(), true);
+//      llvm::errs() << "----" << '\n';
+//      ReplacementContext RC1;
+//      RC1.printInst(*it, llvm::errs(), true);
+//      //llvm::errs() << static_cast<void*>(g) << " " << static_cast<void*>(*it) << '\n';
+//      llvm::errs() << "\n";
+//    } else {
+//      set.emplace_back(g);
+//    }
+//  }
 
-  llvm::errs() << "Duplicates : " << duplicate << '\n';
+  //llvm::errs() << "Duplicates : " << duplicate << '\n';
 
   if (PrintGuesses) {
     llvm::errs() << "Printing all guesses: \n";
