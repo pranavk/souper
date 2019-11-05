@@ -492,6 +492,12 @@ bool Inst::IsEquivalent(Inst *A, Inst *B) {
       if (A->Name != B->Name)
         return false;
     }
+
+//    if (res1 && res2) {
+//      if (A->Name != B->Name) {
+//        return false;
+//      }
+//    }
   }
 
   for (unsigned i = 0; i < A->Ops.size(); i++) {

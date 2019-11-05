@@ -108,7 +108,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);
 
-    //llvm::errs() << "CS1 query: " << Query << '\n';
+    llvm::errs() << "CS1 query: " << Query << '\n';
     EC = souper::isSatisfiableWrapper(SMTSolver, Query, IsSat, ModelInstsFirstQuery.size(), &ModelValsFirstQuery, Timeout);
 
     if (EC) {

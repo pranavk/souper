@@ -19,9 +19,11 @@
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/Pruning.h"
+#include "llvm/Support/MemoryBuffer.h"
 
 #include <queue>
 #include <functional>
+#include <souper/Parser/Parser.h>
 
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
@@ -630,7 +632,7 @@ std::error_code isConcreteCandidateSat(SynthesisContext &SC, Inst *RHSGuess, boo
 
   std::string Query2 = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, 0);
 
- // llvm::errs() << "Query: " << Query2 << '\n';
+  llvm::errs() << "Query: " << Query2 << '\n';
   EC = SC.SMTSolver->isSatisfiable(Query2, IsSat, 0, 0, SC.Timeout);
   if (EC && DebugLevel > 1) {
     llvm::errs() << "verification query failed!\n";
@@ -775,45 +777,57 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
 
 void generateAndSortGuesses(SynthesisContext &SC,
                             std::vector<Inst *> &Guesses) {
-  std::vector<Inst *> Cands;
-  findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
-  if (DebugLevel > 1)
-    llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
+  auto MB_ = MemoryBuffer::getFileOrSTDIN("enum.guesses");
+  auto MB = (*MB_)->getMemBufferRef();
+  std::string ErrStr;
+  std::vector<ReplacementContext> Contexts;
+  std::vector<ParsedReplacement> Reps;
+  Reps = ParseReplacementLHSs(SC.IC, MB.getBufferIdentifier(), MB.getBuffer(),
+                              Contexts, ErrStr);
 
-  int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true);
-
-  int TooExpensive = 0;
-
-  std::vector<Inst *> Inputs;
-  findVars(SC.LHS, Inputs);
-  PruningManager DataflowPruning(SC, Inputs, DebugLevel);
-
-  std::set<Inst*> Visited(Cands.begin(), Cands.end());
-
-  // Cheaper tests go first
-  std::vector<PruneFunc> PruneFuncs = { [&Visited](Inst *I, std::vector<Inst*> &ReservedInsts)  {
-    return CountPrune(I, ReservedInsts, Visited);
-  }};
-  if (EnableDataflowPruning) {
-    DataflowPruning.init();
-    PruneFuncs.push_back(DataflowPruning.getPruneFunc());
-  }
-  auto PruneCallback = MkPruneFunc(PruneFuncs);
-  // TODO(zhengyangl): Refactor the syntactic pruning into a
-  // prune function here, between Cost and Dataflow
-  // TODO(manasij7479) : If RHS is concrete, evaluate both sides
-  // TODO(regehr?) : Solver assisted pruning (should be the last component)
-
-  getGuesses(Guesses, Cands, SC.LHS->Width,
-             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, 0);
-  if (DebugLevel >= 1) {
-    DataflowPruning.printStats(llvm::errs());
+  for (auto rep : Reps) {
+    Guesses.push_back(rep.Mapping.LHS);
   }
 
-  // add nops guesses separately
-  for (auto I : Inputs) {
-    addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
-  }
+//  std::vector<Inst *> Cands;
+//  findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+//  if (DebugLevel > 1)
+//    llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
+//
+//  int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true);
+//
+//  int TooExpensive = 0;
+//
+//  std::vector<Inst *> Inputs;
+//  findVars(SC.LHS, Inputs);
+//  PruningManager DataflowPruning(SC, Inputs, DebugLevel);
+//
+//  std::set<Inst*> Visited(Cands.begin(), Cands.end());
+//
+//  // Cheaper tests go first
+//  std::vector<PruneFunc> PruneFuncs = { [&Visited](Inst *I, std::vector<Inst*> &ReservedInsts)  {
+//    return CountPrune(I, ReservedInsts, Visited);
+//  }};
+//  if (EnableDataflowPruning) {
+//    DataflowPruning.init();
+//    PruneFuncs.push_back(DataflowPruning.getPruneFunc());
+//  }
+//  auto PruneCallback = MkPruneFunc(PruneFuncs);
+//  // TODO(zhengyangl): Refactor the syntactic pruning into a
+//  // prune function here, between Cost and Dataflow
+//  // TODO(manasij7479) : If RHS is concrete, evaluate both sides
+//  // TODO(regehr?) : Solver assisted pruning (should be the last component)
+//
+//  getGuesses(Guesses, Cands, SC.LHS->Width,
+//             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, 0);
+//  if (DebugLevel >= 1) {
+//    DataflowPruning.printStats(llvm::errs());
+//  }
+//
+//  // add nops guesses separately
+//  for (auto I : Inputs) {
+//    addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
+//  }
 
   // one of the real advantages of this approach to synthesis vs
   // CEGIS is that we can synthesize in precisely increasing cost
@@ -824,30 +838,27 @@ void generateAndSortGuesses(SynthesisContext &SC,
                    });
 
 // find duplicates
-//  std::vector<Inst*> set;
-//  unsigned duplicate = 0;
-//  for (auto &g : Guesses) {
-//    std::set<Inst*> ConstSet;
-//    if (souper::getConstants(g, ConstSet); !ConstSet.empty()) {
-//      continue;
-//    }
-//    if (auto it = std::find_if(set.begin(), set.end(), [&g](Inst *A) {return Inst::IsEquivalent(A, g); }); it != set.end()) {
-//      duplicate++;
-//
-//
-//      ReplacementContext RC;
-//      RC.printInst(g, llvm::errs(), true);
-//      llvm::errs() << "----" << '\n';
-//      ReplacementContext RC1;
-//      RC1.printInst(*it, llvm::errs(), true);
-//      //llvm::errs() << static_cast<void*>(g) << " " << static_cast<void*>(*it) << '\n';
-//      llvm::errs() << "\n";
-//    } else {
-//      set.emplace_back(g);
-//    }
-//  }
+  std::vector<Inst*> set;
+  unsigned duplicate = 0;
+  for (auto &g : Guesses) {
 
-  //llvm::errs() << "Duplicates : " << duplicate << '\n';
+    if (auto it = std::find_if(set.begin(), set.end(), [&g](Inst *A) {return Inst::IsEquivalent(A, g); }); it != set.end()) {
+      duplicate++;
+
+
+      ReplacementContext RC;
+      RC.printInst(g, llvm::errs(), true);
+      llvm::errs() << "----" << '\n';
+      ReplacementContext RC1;
+      RC1.printInst(*it, llvm::errs(), true);
+      //llvm::errs() << static_cast<void*>(g) << " " << static_cast<void*>(*it) << '\n';
+      llvm::errs() << "\n";
+    } else {
+      set.emplace_back(g);
+    }
+  }
+
+  llvm::errs() << "Duplicates : " << duplicate << '\n';
 
   if (PrintGuesses) {
     llvm::errs() << "Printing all guesses: \n";
