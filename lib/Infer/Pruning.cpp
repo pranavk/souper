@@ -16,6 +16,7 @@
 #include "souper/Infer/Pruning.h"
 #include "souper/Extractor/Candidates.h"
 #include <cstdlib>
+#include <fstream>
 
 namespace souper {
 
@@ -125,6 +126,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
   bool HasHole = !isConcrete(RHS, false, true);
   bool RHSIsConcrete = isConcrete(RHS);
 
+  std::vector<bool> PruningResults;
+  if (RHSIsConcrete) return false;
+
   std::map<Inst *, std::vector<llvm::ConstantRange>> ConstantLimits;
   std::map<Inst *, llvm::APInt> ConstantKnownNotZero;
   std::map<Inst *, llvm::APInt> ConstantKnownNotOne;
@@ -132,6 +136,11 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
   std::set<souper::Inst *> Constants;
   getConstants(RHS, Constants);
 
+  PruningResults.push_back(!Constants.empty());
+  PruningResults.push_back(HasHole);
+  PruningResults.push_back(LHSHasPhi);
+
+  bool constpruned = false;
   if (!Constants.empty()) {
     auto RestrictedBits = RestrictedBitsAnalysis().findRestrictedBits(RHS);
     if ((~RestrictedBits & (LHSKnownBitsNoSpec.Zero | LHSKnownBitsNoSpec.One)) != 0) {
@@ -141,7 +150,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
         llvm::errs() << "  LHSKB : " << KnownBitsAnalysis::knownBitsString(LHSKnownBitsNoSpec) << "\n";
         llvm::errs() << "  RB    : " << RestrictedBits.toString(2, false) << "\n";
       }
-      return true;
+      constpruned = true;
     }
 
 //     auto LHSCR = ConstantRangeAnalysis().findConstantRange(SC.LHS, BlankCI, false);
@@ -169,6 +178,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
+  PruningResults.push_back(constpruned);
+
+  bool rbpruned = false;
   if (!HasHole) {
     auto DontCareBits = DontCareBitsAnalysis().findDontCareBits(RHS);
 
@@ -182,10 +194,15 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           llvm::errs() << "  pruned using demanded bits analysis.\n";
         }
 
-        return true;
+        rbpruned = true;
+        break;
       }
     }
   }
+
+  PruningResults.push_back(rbpruned);
+  bool crpruned = false;
+  bool kbpruned = false;
 
   for (int I = 0; I < InputVals.size(); ++I) {
     if (StatsLevel > 2) {
@@ -212,7 +229,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               llvm::errs() << "Inst had a symbolic const.";
             }
         }
-        return true;
+        crpruned = true;
       }
 
       auto LHSKB = LHSKnownBits[I];
@@ -228,7 +245,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               llvm::errs() << "Inst had a symbolic const.";
             }
         }
-        return true;
+        kbpruned = true;
       }
 
     } else {
@@ -251,8 +268,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               }
               llvm::errs() << "\n";
             }
-            return true;
+            crpruned = true;
           }
+
           auto KB = KnownBitsAnalysis().findKnownBits(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
             llvm::errs() << "  RHS KnownBits = " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
@@ -266,7 +284,8 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               }
               llvm::errs() << "\n";
             }
-            return true;
+
+            kbpruned = true;
           }
 
           if (!HasHole) {
@@ -290,7 +309,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                       llvm::errs() << "Inst had a symbolic const.";
                     llvm::errs() << "\n";
                   }
-                  return true;
+                  crpruned = true;
                 }
               }
 
@@ -310,9 +329,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                   llvm::errs() << "Inst had a symbolic const.";
                   llvm::errs() << "\n";
                 }
-                return true;
+                kbpruned = true;
               } else {
-                if (StatsLevel > 2) {
+/*                if (StatsLevel > 2) {
                   llvm::errs() << "  KNOTB refined to: " <<
                     Inst::getKnownBitsString(ConstantKnownNotZero[C],
                                               ConstantKnownNotOne[C]) << "\n";
@@ -332,7 +351,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                       return true;
                     }
                   }
-                }
+                }*/
               }
 
             }
@@ -353,7 +372,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
-  for (auto &C : ConstantLimits) {
+  /*for (auto &C : ConstantLimits) {
     auto &Rs = C.second;
     if (!Rs.empty()) {
       // The other case is handled in the input specialization loop
@@ -375,13 +394,26 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
         C.first->RangeRefinement = Rs;
       }
     }
-}
+  }*/
 
-  if (!LHSHasPhi) {
-    return isInfeasibleWithSolver(RHS, StatsLevel);
-  } else {
-    return false;
+//  bool solverResult = false;
+//  if (!LHSHasPhi) {
+//    solverResult = isInfeasibleWithSolver(RHS, StatsLevel);
+//  }
+
+  PruningResults.push_back(crpruned);
+  PruningResults.push_back(kbpruned);
+  //PruningResults.push_back(solverResult);
+
+
+  assert(PruningResults.size() == 7);
+  for (int i = 0; i < PruningResults.size(); i++) {
+    char res = PruningResults[i] ? '1' : '0';
+    outfile << res;
   }
+  outfile << '\n';
+
+  return false;
 }
 
 bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
@@ -466,6 +498,8 @@ PruningManager::PruningManager(
                     InputVars(Inputs_) {}
 
 void PruningManager::init() {
+
+  outfile.open("pruning_results.txt", std::ios_base::app);
 
   Ante = SC.IC.getConst(llvm::APInt(1, true));
   for (auto PC : SC.PCs ) {

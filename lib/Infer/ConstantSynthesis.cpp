@@ -144,14 +144,14 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
 
 
-    if (DebugLevel > 2) {
+   /* if (DebugLevel > 2) {
       if (Pruner) {
         if (Pruner->isInfeasible(RHSCopy, DebugLevel)) {
           //TODO(manasij)
           llvm::errs() << "Second Query Skipping opportunity.\n";
         }
       }
-    }
+    }*/
 
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;

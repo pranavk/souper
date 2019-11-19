@@ -23,6 +23,7 @@
 #include "souper/Inst/Inst.h"
 
 #include <unordered_map>
+#include <fstream>
 
 namespace souper {
 
@@ -44,7 +45,15 @@ public:
   // not be called when pruning is disabled
 
   auto &getInputVals() {return InputVals;}
+
+  ~PruningManager() {
+    if (outfile.is_open()) {
+      outfile.close();
+    }
+  }
 private:
+  std::ofstream outfile;
+
   SynthesisContext &SC;
   std::vector<ConcreteInterpreter> ConcreteInterpreters;
   std::vector<llvm::KnownBits> LHSKnownBits;
